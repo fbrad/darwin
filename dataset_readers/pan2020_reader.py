@@ -18,7 +18,6 @@ class Pan2020DatasetReader(DatasetReader):
         self._token_indexers = token_indexers or SingleIdTokenIndexer()
 
         def _read(self, file_path: str) -> Iterable[Instance]:
-            with open()
             
             return None
 

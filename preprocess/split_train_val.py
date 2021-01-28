@@ -97,6 +97,30 @@ def split_train_val(data_path: str, data_train_path: str, data_val_path: str,
 
     return None
 
+def split_large_jsonl(path_to_jsonl: str, output_folder):
+    """
+    Store each JSON line in a .jsonl file in a separate .json file in ```output_folder```.
+    """
+    if not os.path.exists(output_folder):
+        print(output_folder, " folder does not exist")
+        return
+    
+    if len(os.listdir(output_folder)) > 0:
+        print(output_folder, " is not empty, abort")
+        print(os.listdir(output_folder))
+        return
+
+    with open(path_to_jsonl) as fp:
+        for idx, line in enumerate(fp):
+            if idx % 1000 == 0:
+                print(idx)
+            entry = json.loads(line)
+            entry_path = os.path.join(output_folder, entry["id"])
+            if os.path.exists(entry_path):
+                print(entry_path, " already exists")
+            with open(entry_path, "w") as out_fp:
+                json.dump(entry, out_fp)
+
 
 if __name__ == '__main__':
     PAN2020_SMALL_DATA = "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small.jsonl"
@@ -114,26 +138,5 @@ if __name__ == '__main__':
     #merge_data_and_labels(PAN2020_DATA_LARGE, PAN2020_GT_LARGE, PAN2020_FULL_DATA_LARGE)
     #split_train_val(PAN2020_SMALL, PAN2020_SMALL_TRAIN, PAN2020_SMALL_VAL, 0.9, 'small')
     #split_train_val(PAN2020_LARGE, PAN2020_LARGE_TRAIN, PAN2020_LARGE_VAL, 0.95, 'large')
-
+    split_large_jsonl(PAN2020_SMALL_VAL, "/pan2020/pan20-authorship-verification-training-small/val")
     # sanity checks
-    pos_train = 0
-    pos_val = 0
-    neg_train = 0
-    neg_val = 0
-    with open(PAN2020_LARGE_TRAIN) as f, open(PAN2020_LARGE_VAL) as g:
-        for line in g:
-            entry = json.loads(line)
-            if entry['same']:
-                pos_val += 1
-            else:
-                neg_val += 1
-
-        for line in f:
-            entry = json.loads(line)
-            if entry['same']:
-                pos_train += 1
-            else:
-                neg_train += 1
-    
-    print("pos_train = ", pos_train, " neg_train = ", neg_train)
-    print("pos_val = ", pos_val, " neg_val = ", neg_val)
