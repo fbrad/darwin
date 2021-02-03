@@ -22,7 +22,7 @@ class Pan2020Dataset(Dataset):
         # Others - BertTokenizer (no Indexer)
         self.tokenizer = tokenizer
         self.indexer = indexer
-        self.json_files = os.listdir(path)
+        self.json_files = os.listdir(path)[:10]
 
     def __getitem__(self, idx):
         if idx < 0 or idx >= len(self):

@@ -5,10 +5,13 @@ from transformers.models.auto.modeling_auto import AutoModel, AutoModelForSequen
 from transformers.models.bert import BertForSequenceClassification
 from torch.utils.data import DataLoader
 from models.character_bert import CharacterBertModel
-
 from dataset_readers.pan2020_dataset import Pan2020Dataset
+from utils.training import train
 from utils.character_cnn import CharacterIndexer
+from utils.misc import set_seed, parse_args
+import sys
 import torch
+import logging
 import os
 from tqdm import tqdm
 
@@ -17,13 +20,19 @@ if __name__ == '__main__':
     #DATA_VAL_PATH = "/pan2020/pan20-authorship-verification-training-small/val"
     DATA_TRAIN_PATH = "data/train"
     DATA_VAL_PATH = "data/val"
-    MODEL_TO_URL = {
-        'general_character_bert': 'https://drive.google.com/open?id=11-kSfIwSWrPno6A4VuNFWuQVYD8Bg_aZ',
-        'medical_character_bert': 'https://drive.google.com/open?id=1LEnQHAqP9GxDYa0I3UrZ9YV2QhHKOh2m',
-        'general_bert': 'https://drive.google.com/open?id=1fwgKG2BziBZr7aQMK58zkbpI0OxWRsof',
-        'medical_bert': 'https://drive.google.com/open?id=1GmnXJFntcEfrRY4pVZpJpg7FH62m47HS'
-    }
+    args = parse_args()
+    args.output_dir = "output/character_bert"
 
+    # Set up logging
+    logging.basicConfig(
+        filename=os.path.join(args.output_dir, 'output.log'),
+        format="%(asctime)s - %(levelname)s - %(filename)s -   %(message)s",
+        datefmt="%d/%m/%Y %H:%M:%S",
+        force=True
+    )
+    logging.getLogger().setLevel(logging.INFO)
+
+    # set up tokenizer
     tokenizer = BertTokenizer.from_pretrained(
         os.path.join('pretrained_models', 'bert-base-uncased'),
         do_lower_case=False)
@@ -31,13 +40,11 @@ if __name__ == '__main__':
     characters_indexer = CharacterIndexer()
     tokenization_function = tokenizer.tokenize
     
-    train_dataset = Pan2020Dataset(DATA_VAL_PATH, tokenizer=tokenizer, indexer=characters_indexer)
+    train_dataset = Pan2020Dataset(DATA_TRAIN_PATH, tokenizer=tokenizer, indexer=characters_indexer)
     val_dataset = Pan2020Dataset(DATA_VAL_PATH, tokenizer=tokenizer, indexer=characters_indexer)
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    train_loader = DataLoader(train_dataset, batch_size=2)
-    val_loader = DataLoader(val_dataset, batch_size=2)
-    
+    # set up model
+    logging.info('Loading %s model', "general_character_bert")
     config = BertConfig.from_pretrained(
         os.path.join('pretrained_models', "general_character_bert"),
         num_labels=2
@@ -47,38 +54,46 @@ if __name__ == '__main__':
         os.path.join('pretrained_models', "general_character_bert"),
         config=config
     )
-    model.train().to(device)
+    model.to(args.device)
 
-    no_decay = ['bias', 'LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-    ]
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
+    global_step, train_loss, best_val_metric, best_val_epoch = train(
+        args=args,
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        model=model
+    )
+    logging.info("global_step = %s, average training loss = %s", global_step, train_loss)
+    logging.info("Best performance: Epoch=%d, Value=%s", best_val_epoch, best_val_metric)
 
-    num_epochs = 1
-    for idx in range(num_epochs):
-        epoch_train_loss = 0.0
-        for b_idx, batch in tqdm(enumerate(train_loader)):
-            optimizer.zero_grad()
-            batch = {k: v.to(device=device) for k, v in batch.items()}
-            #print("batch = ", batch)
-            outputs = model(**batch, return_dict=False)
-            #print("outputs = ", outputs)
-            loss = outputs['loss'] if 'loss' in outputs else outputs[0]
-            print("Training loss ", loss)
-            epoch_train_loss += loss
-            loss.backward()
-            optimizer.step()
-            #break
-        epoch_train_loss /= b_idx
+    # TODO: move this into trainer
+    # no_decay = ['bias', 'LayerNorm.weight']
+    # optimizer_grouped_parameters = [
+    #     {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+    #     {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+    # ]
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
+
+    # num_epochs = 1
+    # for idx in range(num_epochs):
+    #     epoch_train_loss = 0.0
+    #     for b_idx, batch in tqdm(enumerate(train_loader)):
+    #         optimizer.zero_grad()
+    #         batch = {k: v.to(device=device) for k, v in batch.items()}
+    #         outputs = model(**batch, return_dict=False)
+    #         loss = outputs['loss'] if 'loss' in outputs else outputs[0]
+    #         #print("Training loss ", loss)
+    #         epoch_train_loss += loss
+    #         loss.backward()
+    #         optimizer.step()
+    #         #break
+    #     epoch_train_loss /= b_idx
             
-        epoch_val_loss = 0.0
-        for b_idx, batch in tqdm(enumerate(val_loader)):
-            batch = {k: v.to(device=device) for k, v in batch.items()}
-            outputs = model(**batch, return_dict=False)
-            loss = outputs['loss'] if 'loss' in outputs else outputs[0]
-            epoch_val_loss += loss
-            break
-        epoch_val_loss /= b_idx
-        print("Epoch %d: train loss %f, val loss %f" % (idx, epoch_train_loss, epoch_val_loss))
+    #     epoch_val_loss = 0.0
+    #     for b_idx, batch in tqdm(enumerate(val_loader)):
+    #         batch = {k: v.to(device=device) for k, v in batch.items()}
+    #         outputs = model(**batch, return_dict=False)
+    #         loss = outputs['loss'] if 'loss' in outputs else outputs[0]
+    #         epoch_val_loss += loss
+    #         break
+    #     epoch_val_loss /= b_idx
+    #     print("Epoch %d: train loss %f, val loss %f" % (idx, epoch_train_loss, epoch_val_loss))
