@@ -27,6 +27,12 @@ def parse_args():
     """ Parse command line arguments and initialize experiment. """
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Whether to train the model with 10 examples (debug) or not"
+    )
+    parser.add_argument(
         "--embedding",
         type=str,
         default='general_character_bert',

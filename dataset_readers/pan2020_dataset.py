@@ -7,7 +7,8 @@ from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from utils.data import _truncate_seq_pair 
 
 class Pan2020Dataset(Dataset):
-    def __init__(self, path: str, tokenizer: PreTrainedTokenizerBase, indexer=None):
+    def __init__(self, path: str, tokenizer: PreTrainedTokenizerBase, 
+                indexer=None, debug: bool=False):
         """
         Arguments:
             path: path to folder containing the .json files
@@ -22,7 +23,8 @@ class Pan2020Dataset(Dataset):
         # Others - BertTokenizer (no Indexer)
         self.tokenizer = tokenizer
         self.indexer = indexer
-        self.json_files = os.listdir(path)[:10]
+        self.debug = debug
+        self.json_files = os.listdir(path)[:100] if debug else os.listdir(path)
 
     def __getitem__(self, idx):
         if idx < 0 or idx >= len(self):

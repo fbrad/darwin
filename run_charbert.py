@@ -21,6 +21,7 @@ if __name__ == '__main__':
     DATA_TRAIN_PATH = "data/train"
     DATA_VAL_PATH = "data/val"
     args = parse_args()
+    args.debug = True
     args.output_dir = "output/character_bert"
 
     # Set up logging
@@ -28,6 +29,7 @@ if __name__ == '__main__':
         filename=os.path.join(args.output_dir, 'output.log'),
         format="%(asctime)s - %(levelname)s - %(filename)s -   %(message)s",
         datefmt="%d/%m/%Y %H:%M:%S",
+        filemode='w',
         force=True
     )
     logging.getLogger().setLevel(logging.INFO)
@@ -35,13 +37,23 @@ if __name__ == '__main__':
     # set up tokenizer
     tokenizer = BertTokenizer.from_pretrained(
         os.path.join('pretrained_models', 'bert-base-uncased'),
-        do_lower_case=False)
+        do_lower_case=args.do_lower_case)
     tokenizer = tokenizer.basic_tokenizer
     characters_indexer = CharacterIndexer()
     tokenization_function = tokenizer.tokenize
     
-    train_dataset = Pan2020Dataset(DATA_TRAIN_PATH, tokenizer=tokenizer, indexer=characters_indexer)
-    val_dataset = Pan2020Dataset(DATA_VAL_PATH, tokenizer=tokenizer, indexer=characters_indexer)
+    train_dataset = Pan2020Dataset(
+        DATA_TRAIN_PATH, 
+        tokenizer=tokenizer, 
+        indexer=characters_indexer, 
+        debug=args.debug
+    )
+    val_dataset = Pan2020Dataset(
+        DATA_VAL_PATH, 
+        tokenizer=tokenizer, 
+        indexer=characters_indexer,
+        debug=args.debug
+    )
 
     # set up model
     logging.info('Loading %s model', "general_character_bert")

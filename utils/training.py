@@ -11,12 +11,12 @@ import numpy as np
 import sklearn.metrics as sklearn_metrics
 
 import torch
+from torch.nn.functional import softmax
 from torch.utils.data import SequentialSampler, RandomSampler, DataLoader
 from transformers import AdamW, get_linear_schedule_with_warmup
-
+from utils.metrics import evaluate_all
 from utils.misc import set_seed
 import logging
-#logging.getLogger('__name__')
 
 
 def train(args, train_dataset, eval_dataset, model):
@@ -63,7 +63,6 @@ def train(args, train_dataset, eval_dataset, model):
     logging.info("  Using weight decay (value=%s)", args.weight_decay)
     global_step = 0
     epochs_trained = 0
-    steps_trained_in_current_epoch = 0
 
     tr_loss, logging_loss = 0.0, 0.0
     best_metric, best_epoch = -1.0, -1  # Init best -1 so that 0 > best
@@ -73,22 +72,10 @@ def train(args, train_dataset, eval_dataset, model):
 
     set_seed(seed_value=args.seed)  # Added here for reproductibility
     for num_epoch in train_iterator:
+        epoch_loss = 0.0
         epoch_iterator = tqdm.tqdm(train_dataloader, desc="Iteration")
         for step, batch in enumerate(epoch_iterator):
-
-            # Skip past any already trained steps if resuming training
-            if steps_trained_in_current_epoch > 0:
-                steps_trained_in_current_epoch -= 1
-                continue
-
             model.train()
-            #batch = tuple(t.to(args.device) for t in batch)
-            # inputs = {
-            #     "input_ids": batch[0],
-            #     "attention_mask": batch[1],
-            #     "token_type_ids": batch[2],
-            #     "labels": batch[3],
-            #     "return_dict": False}
             batch = {k: v.to(device=args.device) for k, v in batch.items()}
             batch['return_dict'] = False
 
@@ -96,6 +83,7 @@ def train(args, train_dataset, eval_dataset, model):
             loss = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
             loss.backward()
             tr_loss += loss.item()
+            epoch_loss += loss.item()
             
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
             optimizer.step()
@@ -113,7 +101,7 @@ def train(args, train_dataset, eval_dataset, model):
                 )
 
                 logging_loss = tr_loss
-                metric = results['f1']
+                metric = results['overall']
 
                 if metric > best_metric:
                     best_metric = metric
@@ -129,6 +117,7 @@ def train(args, train_dataset, eval_dataset, model):
                     #torch.save(optimizer.state_dict(), os.path.join(args.output_dir, "optimizer.pt"))
                     #torch.save(scheduler.state_dict(), os.path.join(args.output_dir, "scheduler.pt"))
                     #logging.info("Saving optimizer and scheduler states to %s", args.output_dir)
+        logging.info(" epoch loss %d = %f", num_epoch, epoch_loss / step + 1)
 
     return global_step, tr_loss / global_step, best_metric, best_epoch
 
@@ -153,39 +142,44 @@ def evaluate(args, eval_dataset, model):
     out_label_ids = None
     model.eval()
     for batch in tqdm.tqdm(eval_dataloader, desc="Evaluating"):
-        #batch = tuple(t.to(args.device) for t in batch)
         batch = {k: v.to(device=args.device) for k, v in batch.items()}
         batch['return_dict'] = False
 
         with torch.no_grad():
-            # inputs = {
-            #     "input_ids": batch[0],
-            #     "attention_mask": batch[1],
-            #     "token_type_ids": batch[2],
-            #     "labels": batch[3],
-            #     "return_dict": False}
             outputs = model(**batch)
             tmp_eval_loss, logits = outputs[:2]
-
             eval_loss += tmp_eval_loss.item()
+
         nb_eval_steps += 1
         if preds is None:
+            # batch x 2
+            probs = softmax(logits, dim=1).detach().cpu().numpy()
             preds = logits.detach().cpu().numpy()
+            # batch
             out_label_ids = batch["labels"].detach().cpu().numpy()
         else:
+            # num_eval_samples x 2
             preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+            probs = np.append(probs, softmax(logits, dim=1).detach().cpu().numpy(), axis=0)
+            # num_eval_samples
             out_label_ids = np.append(out_label_ids, batch["labels"].detach().cpu().numpy(), axis=0)
 
     eval_loss = eval_loss / nb_eval_steps
     
+    # num_eval_samples
     preds_list = np.argmax(preds, axis=1)
-    results = {
-        "loss": eval_loss,
-        "precision": sklearn_metrics.precision_score(out_label_ids, preds_list, average='micro'),
-        "recall": sklearn_metrics.recall_score(out_label_ids, preds_list, average='micro'),
-        "f1": sklearn_metrics.f1_score(out_label_ids, preds_list, average='micro'),
-        "accuracy": sklearn_metrics.accuracy_score(out_label_ids, preds_list),
-    }
+    probs_list = probs[:,1]
+
+    results = evaluate_all(out_label_ids, probs_list)
+    results['loss'] = eval_loss
+
+    # results = {
+    #     "loss": eval_loss,
+    #     "precision": sklearn_metrics.precision_score(out_label_ids, preds_list, average='micro'),
+    #     "recall": sklearn_metrics.recall_score(out_label_ids, preds_list, average='micro'),
+    #     "f1": sklearn_metrics.f1_score(out_label_ids, preds_list, average='micro'),
+    #     "accuracy": sklearn_metrics.accuracy_score(out_label_ids, preds_list),
+    # }
 
     logging.info("***** Eval results *****")
     for key in sorted(results.keys()):
