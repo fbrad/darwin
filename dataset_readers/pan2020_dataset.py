@@ -24,7 +24,7 @@ class Pan2020Dataset(Dataset):
         self.tokenizer = tokenizer
         self.indexer = indexer
         self.debug = debug
-        self.json_files = os.listdir(path)[:100] if debug else os.listdir(path)
+        self.json_files = os.listdir(path)[:10] if debug else os.listdir(path)
 
     def __getitem__(self, idx):
         if idx < 0 or idx >= len(self):
