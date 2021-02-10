@@ -117,6 +117,76 @@ def split_train_val(data_path: str, data_train_path: str, data_val_path: str,
 
     return None
 
+def split_pan_dataset(data_path: str, 
+                      percentage: float, 
+                      dataset_size: str = ['small', 'large']) -> (List, List):
+    """
+    Split PAN 2020 dataset in 2 splits and S1 and S2 such that authors and fandoms
+    in S2 appear in S1 as well. This function can be used to split the initial
+    dataset into train and test, as well as to split the train subset into train and dev.
+    Args:
+        data_path: path to .jsonl file containing the author pairs, one per line
+                   It is recommended to use the ```pan20-av-*-no-text.jsonl``` file,
+                   because it doesn't store the text pair and is significantly smaller.
+        percentage: percentage of the smaller split 
+        dataset_size: refers to the PAN 2020 large or small dataset
+    """
+    sizes = {
+        "small": {"size": 52601, "positive": 27834, "negative": 24767},
+        "large": {"size": 275565, "positive": 147778, "negative": 127787}
+    }
+    # load examples
+    examples = []
+    with open(data_path) as fp:
+        for line in fp:
+            examples.append(json.loads(line))
+
+    same_author_examples = [ex for ex in examples if ex['same']]
+    diff_author_examples = [ex for ex in examples if not ex['same']]
+    
+    # add test ids of same-author pairs
+    test_ids = []
+    # {'author_id': [ids of SA pairs of this authors]}
+    same_author_docs = defaultdict(list)
+    for example in same_author_examples:
+        author_id = example['authors'][0]
+        same_author_docs[author_id].append(example['id'])
+
+    sa_test_size = int(percentage * len(same_author_examples))
+    count = 0
+    for author_id, pair_ids in same_author_docs.items():
+        author_docs_num = len(pair_ids)
+        if author_docs_num >= 2:
+            test_ids += pair_ids[:author_docs_num // 2]
+            count += author_docs_num // 2
+        if count > sa_test_size:
+            break
+
+    # {'author_id': [ids of DA pairs in which this author appear]}
+    diff_author_docs = defaultdict(list)
+    for example in diff_author_examples:
+        fst_author_id = example['authors'][0]
+        snd_author_id = example['authors'][1]
+        if int(fst_author_id) < int(snd_author_id):
+            author_id = fst_author_id
+        else:
+            author_id = snd_author_id
+        diff_author_docs[author_id].append(example['id'])
+
+    # DA pairs
+    # group them by author
+    # (A1, A2) - move this to test, because A1 exists in other DA pairs, as well as A2
+    # (A1, A3) - keep this pair
+    # (A2, A5) 
+    # (A2, A7)
+    
+    
+
+
+    
+
+
+
 def write_jsonl_to_folder(path_to_jsonl: str, output_folder):
     """
     Store each JSON line in a .jsonl file in a separate .json file in ```output_folder```.

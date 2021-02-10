@@ -14,6 +14,7 @@
  - 14.704 authors in SA pairs can be found in DA pairs as well
  - 3.966 authors in DA pairs appear in at least one DA pair
  - author tuples (Ai, Aj) in DA pairs are unique (i.e. authors 532 and 7145 can be found in this combination only once in DA pairs)
+ - there are 494.236 distinct documents
 
 
 We now detail the closed-set and open-set setups. In both setups, we split the XL dataset into 95% training and 5% validation and the XS dataset into 90% training and 10% validation. 
