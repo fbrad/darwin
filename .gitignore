@@ -2,6 +2,7 @@
 __pycache__
 data/train/
 data/val/
+data/
 pretrained_models/
 output/
 *.bin
