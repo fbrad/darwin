@@ -16,6 +16,18 @@
  - author tuples (Ai, Aj) in DA pairs are unique (i.e. authors 532 and 7145 can be found in this combination only once in DA pairs)
  - there are 494.236 distinct documents
 
+If we separate the DA pairs (ai, aj) into two groups Train and Test, such that both authors (ai, aj) of DA pairs in Test also appear in DA pairs in Train
+(or SA pairs), we get the following stats:
+ - Number of DA pairs:  127787
+ - Number of candidate test pairs:  181
+ - Number of candidate train pairs:  127606
+The small number of candidate test pairs suggest that most of the authors in the DA pairs of the test split are 'unseen' at training
+time. To loosen this restriction, we can split the DA pairs such that at least one of the authors (ai, aj) in a DA Test pair appears in
+other DA Train pairs or in a SA pair. We get the following stats:
+ - Number of DA pairs:  127787
+ - Number of candidate test pairs:  17894
+ - Number of candidate train pairs:  109893
+
 
 We now detail the closed-set and open-set setups. In both setups, we split the XL dataset into 95% training and 5% validation and the XS dataset into 90% training and 10% validation. 
 
@@ -27,7 +39,7 @@ In this setup, authors of same-author pairs in the validation set are guaranteed
 
 Different-author pairs:
  - the DA pairs are randomly assigned to train/val split*
- - this is suboptimal for now, because unseen authors can appear at evaluation, for instance (A1, A2) in training set and (A3, A4) in val set. 
+ - unseen authors can appear at evaluation, for instance (A1, A2) in training set and (A3, A4) in val set. 
 
  Same-author (SA) pairs:
  - while populating the validation split, SA pairs are evenly assigned to train/val splits
