@@ -3,11 +3,11 @@ import os
 import random
 import numpy as np
 from collections import defaultdict
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Callable, Tuple
 
 def merge_data_and_labels(data_path: str, ground_truth_path: str, merged_data_path: str):
     """
-    Merge authors data and ground truth data into a single file.
+    Merge PAN authors data and ground truth data into a single ```.jsonl``` file.
     """
     # read ground truth data
     with open(ground_truth_path) as f:
@@ -47,126 +47,106 @@ def remove_text_from_jsonl(input_jsonl: str, output_jsonl: str):
 
 
 
-def split_train_val(data_path: str, data_train_path: str, data_val_path: str, 
-                    train_percentage: float, dataset_size: str = ['small', 'large']):
+                    
+def split_pan_dataset_closed_set_v1(examples: List[Dict], 
+                                    test_split_percentage: float) -> (List, List):
     """
-    Split data intro train and val according to Araujo-Pino et al. 2020 
+    Split data intro train and val/test in an almost closed-set fashion, by 
+    following Araujo-Pino et al. 2020 
     ( https://pan.webis.de/downloads/publications/papers/araujopino_2020.pdf )
-    Arguments:
-        data_path: path to .jsonl file containing pairs of author texts
-        data_train_path: path to .jsonl file where training pairs will be saved
-        data_val_path: path to .jsonl file where validation pairs will be saved
-        train_percentage: what percentage p in [0, 1] goes to training data
+    This algorithm ensures that authors of SA pairs in the test set appear in the
+    training set, but gives no guarantee that authors of test DA pairs appear in 
+    the training set.
+    Args:
+        examples: dataset samples read from a .jsonl file using read_jsonl_examples()
+        test_split_percentage: size of the Test split as a percentage of the whole dataset
     """
-    if os.path.exists(data_train_path):
-        print("File ", data_train_path, " already exists")
-        return
-    
-    if os.path.exists(data_val_path):
-        print("File ", data_val_path, " already exists")
-        return
-
-    # small dataset: 52601  pairs, first 27834 entries are positive, first p% 
-    # large dataset: 275565 pairs, first 147778 entries are positive
-    # Dataset splitting order:
-    # | positive val | positive train | negative val | negative train |
-    # Say we want to split train/val as 90%-10%:
-    # We go through the first 20% of positive examples:
-    #  - half of them (10%) get assigned to train and half of them (10%) to val
-    #  - the rest 80% get assigned to train   
-    # This ensures that authors from positive pairs in val are equally present in train
-
+    assert test_split_percentage > 0 and test_split_percentage < 1, "test size in (0,1)"
     sizes = {
         "small": {"size": 52601, "positive": 27834, "negative": 24767},
         "large": {"size": 275565, "positive": 147778, "negative": 127787}
     }
-    val_percentage = 1 - train_percentage
-    assert val_percentage <= 0.5, "validation split too large"
-    ds = sizes[dataset_size]
-    with open(data_path) as f, open(data_train_path, "w") as train_fp, open(data_val_path, "w") as val_fp:
-        # index where positive entries start to get assigned to train exclusively
-        pos_train_start_idx = int(2 * val_percentage * ds['positive'])
-        # index where negative entries start to get assigned to train
-        neg_train_start_idx = ds['positive'] + int(val_percentage * ds['negative'])
- 
-        train_entries_count = 0
-        val_entries_count = 0
-        for idx, line in enumerate(f):
-            if idx % 100 == 0:
-                print("idx = ", idx)
 
-            entry = json.loads(line)
-            if entry['same']:
-                if idx < pos_train_start_idx:
-                    out_fp = val_fp if idx % 2 == 0 else train_fp
-                else:
-                    out_fp = train_fp
-            else:
-                out_fp = val_fp if idx < neg_train_start_idx else train_fp
-            
-            json.dump(entry, out_fp)
-            out_fp.write('\n')
-
-            # sanity check
-            if out_fp == train_fp:
-                train_entries_count += 1
-            else:
-                val_entries_count += 1
+    test_ids = []
+    for idx, example in enumerate(examples):
+        if idx % 10000 == 0:
+            print("[split_pan_dataset_closed_set_v1] processed %d examples" % (idx))
         
-        print("train entries written: ", train_entries_count, ", val entries written: ", val_entries_count)
+    # determine Train/Test sizes
+    same_author_examples = [ex for ex in examples if ex['same']]
+    diff_author_examples = [ex for ex in examples if not ex['same']]
+    random.shuffle(diff_author_examples)
+    sa_size = len(same_author_examples)
+    da_size = len(diff_author_examples)
+    sa_test_size = int(test_split_percentage * sa_size)
+    sa_train_size = sa_size - sa_test_size
+    da_test_size = int(test_split_percentage * da_size)
+    da_train_size = da_size - da_test_size
 
-    return None
+    # retrieve documents of all same-author (SA) pairs
+    # sa_docs = {'author_id': [ids of SA pairs of this authors]}
+    sa_docs = defaultdict(list)
+    for example in same_author_examples:
+        author_id = example['authors'][0] 
+        sa_docs[author_id].append(example['id'])
 
+    # first, populate SA test set
+    print("[split_pan_dataset_closed_set_v1] Adding same-author (SA) pairs to the test set")
+    sa_test_count = 0
+    for author_id, pair_ids in sa_docs.items():
+        author_docs_num = len(pair_ids)
+        if author_docs_num >= 2:
+            test_ids += pair_ids[:author_docs_num // 2]
+            sa_test_count += author_docs_num // 2
+        if sa_test_count >= sa_test_size:
+            break
+    
+    # add DA pairs to test set
+    da_test_count = 0
+    print("[split_pan_dataset_closed_set_v1] Adding different-author (DA) pairs to the test set")
+    for idx, example in enumerate(diff_author_examples):
+        if idx % 10000 == 0:
+            print("[split_pan_dataset_closed_set_v1] processed %d examples" % (idx))
+        test_ids.append(example['id'])
+        da_test_count += 1
+        if da_test_count == da_test_size:
+            break
 
+    test_ids_map = {test_id:1 for test_id in test_ids}
+    train_ids = [example['id'] for example in examples if example['id'] not in test_ids_map]
+    train_ids_map = {train_id:1 for train_id in train_ids}
 
-def split_pan_dataset_old(data_path: str, 
-                          percentage: float, 
-                          dataset_size: str = ['small', 'large']) -> (List, List):
-    # DA pairs
-    # Algorithm 1: slow
-    # (A1, A2) - move this to test, because A1 exists in other DA pairs, as well as A2
-    # (A1, A3) - keep this pair
-    # (A2, A5) 
-    # (A2, A7)
-    # for (ai, aj) in DA pairs:
-    #   if ai in other DA pairs and aj in other DA pairs:
-    #       move (ai, aj) to test
-    #       mark pairs in which ai and aj appear as train    
-    # all pairs belong to train
-    is_test = [False] * len(diff_author_examples)
-    is_locked = [False] * len(diff_author_examples) #examples cannot be switched 
-    fst_authors = [ex['authors'][0] for ex in diff_author_examples]
-    snd_authors = [ex['authors'][1] for ex in diff_author_examples]
-    for idx, da_pair in enumerate(diff_author_examples):
-        print("[split_pan_dataset] id = ", idx)
-        if is_locked[idx] or is_test[idx]:
-            continue
-        a1, a2 = da_pair['authors'][0], da_pair['authors'][1]
-        
-        # search author a1 in other pairs marked as training
-        a1_idx = -1
-        for i, author in enumerate(fst_authors):
-            if is_test[i]:
-                continue
-            if a1 == author:
-                a1_idx = i
+    # statistics
+    train_stats = defaultdict(int)
+    train_stats['size'] = len(train_ids)
+    test_stats = defaultdict(int)
+    test_stats['size'] = len(test_ids)
+    for example in examples:
+        same_author = example['same']
+        same_fandom = example['fandoms'][0] == example['fandoms'][1]
+        stats_dict = train_stats if example['id'] in train_ids_map else test_stats
+        if same_author:
+            if same_fandom:
+                stats_dict['sa_sf'] += 1
+            else:
+                stats_dict['sa_df'] += 1
+        else:
+            if same_fandom:
+                stats_dict['da_sf'] += 1
+            else:
+                stats_dict['da_df'] += 1
+    
+    for split_name, stats_dict in zip(["TRAIN", "TEST"], [train_stats, test_stats]):
+        print("%s size: %d" % (split_name, stats_dict['size']))
+        print("    Same author pairs: ", stats_dict['sa_sf'] + stats_dict['sa_df'])
+        print("        Same fandom pairs: ", stats_dict['sa_sf'])
+        print("        Different fandom pairs: ", stats_dict['sa_df'])
+        print("    Different author pairs: ", stats_dict['da_sf'] + stats_dict['da_df'])
+        print("        Same fandom pairs: ", stats_dict['da_sf'])
+        print("        Different fandom pairs: ", stats_dict['da_df'])
 
-        # search author a2 in other pairs marked as training
-        a2_idx = -1
-        for i, author in enumerate(snd_authors):
-            if is_test[i]:
-                continue
-            if a2 == author:
-                a2_idx = i        
+    return (train_ids, test_ids)
 
-        # if we found a1 and a2 in other training pairs, we can safely mark
-        # (a1, a2) for testing, as well as lock pairs (a1_idx, *) and (*, a2_idx)
-        # for training
-        if a1_idx >= 0 and a2_idx >= 0:
-            is_test[idx] = True
-            is_locked[idx] = True
-            is_locked[a1_idx] = True
-            is_locked[a2_idx] = True
 
 def read_jsonl_examples(data_path: str) -> List[Dict]:
     """
@@ -186,18 +166,21 @@ def read_jsonl_examples(data_path: str) -> List[Dict]:
 
     return examples
 
-def pan_dataset_closed_train_test_split(examples: List[Dict], 
-                                        test_split_percentage: float) -> (List, List):
+
+def split_pan_dataset_closed_set_v2(examples: List[Dict], 
+                                    test_split_percentage: float) -> (List, List):
     """
-    Split PAN 2020 dataset in Train and Test under the closed-set assumption. This requires that
+    Split PAN 2020 dataset in Train and Test under the closed-set assumption*. This requires that
     authors in Test set appear in Train as well. However, due to the large number of authors 
-    in the different-author (DA) pairs, it is difficult to achieve strictly. We try to guarantee 
-    that at least one of the authors (ai, aj) in DA Test pairs appears in DA Train Pairs or
-    in same-author (SA) Train pairs.
+    in the different-author (DA) pairs, it is difficult to achieve this strictly. We try to 
+    make sure that at least one of the authors (ai, aj) in DA Test pairs appears in DA Train 
+    pairs or in same-author (SA) Train pairs.
 
     Args:
         examples: dataset samples read from a .jsonl file using read_jsonl_examples()
         test_split_percentage: size of the Test split as a percentage of the whole dataset
+    
+    Returns a list of unique pair ids for each dataset split
     """
     assert test_split_percentage > 0 and test_split_percentage < 1, "test size in (0,1)"
     sizes = {
@@ -208,6 +191,7 @@ def pan_dataset_closed_train_test_split(examples: List[Dict],
     # determine Train/Test sizes
     same_author_examples = [ex for ex in examples if ex['same']]
     diff_author_examples = [ex for ex in examples if not ex['same']]
+    random.shuffle(diff_author_examples)
     sa_size = len(same_author_examples)
     da_size = len(diff_author_examples)
     sa_test_size = int(test_split_percentage * sa_size)
@@ -247,15 +231,19 @@ def pan_dataset_closed_train_test_split(examples: List[Dict],
     # ai or aj in the test split appears in other DA train pairs or in SA pairs
     test_ids = []
     test_author_ids = set()
+    da_sf = 0
     for example in diff_author_examples:
         fst_author_id = example['authors'][0] # a1
         snd_author_id = example['authors'][1] # a2
+        same_fandom = example['fandoms'][0] == example['fandoms'][1]
 
         # check if a1 or a2 appear in other DA pairs
         fst_frequent = diff_author_freq[fst_author_id] >= 2
         snd_frequent = diff_author_freq[snd_author_id] >= 2
         if fst_frequent or snd_frequent:
             test_ids.append(example['id'])
+            if same_fandom:
+                da_sf += 1
             if fst_frequent:
                 test_author_ids.add(fst_author_id)
                 diff_author_freq[fst_author_id] -= 1
@@ -265,6 +253,8 @@ def pan_dataset_closed_train_test_split(examples: List[Dict],
         # check if a1 or a2 appear in SA pairs
         elif fst_author_id in sa_authors_ids or snd_author_id in sa_authors_ids:
             test_ids.append(example['id'])
+            if same_fandom:
+                da_sf += 1
             if fst_author_id in sa_authors_ids:
                 test_author_ids.add(fst_author_id)
             if snd_author_id in sa_authors_ids:
@@ -274,8 +264,10 @@ def pan_dataset_closed_train_test_split(examples: List[Dict],
     train_ids = [ex_id for ex_id in da_ids if ex_id not in test_ids]
 
     print("Number of different-author (DA) pairs: ", len(diff_author_examples))
-    print(" Number of candidate DA test pairs: ", len(test_ids))
-    print(" Number of candidate DA train pairs: ", len(train_ids))
+    print("    Number of candidate DA test pairs: ", len(test_ids))
+    print("         of which same fandom: ", da_sf)
+    print("         of which diff fandom: ", len(test_ids) - da_sf)
+    print("    Number of candidate DA train pairs: ", len(train_ids))
 
     # if too many DA test candidates, trim them
     if len(test_ids) > da_test_size:
@@ -346,10 +338,7 @@ def pan_dataset_closed_train_test_split(examples: List[Dict],
 
     
     test_ids_map = {test_id:1 for test_id in test_ids}
-    train_ids = []
-    for idx, example in enumerate(examples):
-        if example['id'] not in test_ids_map:
-            train_ids.append(example['id'])
+    train_ids = [example['id'] for example in examples if example['id'] not in test_ids_map]
     train_ids_map = {train_id:1 for train_id in train_ids}
 
     # statistics
@@ -697,13 +686,18 @@ def sample_pairs(authors_data: Dict, output_folder: str):
 def split_jsonl_dataset(path_to_original_jsonl: str,
                         path_to_train_jsonl: str, 
                         path_to_test_jsonl: str,
+                        split_function: Callable[[List[Dict], float], Tuple[List]],
                         test_split_percentage: float):
     """
-    Split the PAN dataset into 2 splits.
+    Split the PAN dataset into 2 splits. This wrapper function can be used to split the original dataset
+    into train and test, as well as further split the train set into train and val.
     Args:
         path_to_original_jsonl (str): path to existing .jsonl file, such as ```pan20-av-large-no-text.jsonl```
         path_to_train_jsonl (str): path to .jsonl file where the training examples will be saved
         path_to_test_jsonl (str): path to .jsonl file where the test examples will be saved
+        split_function (Callable): split function to be used (split_pan_dataset_closed_set_v1 or
+                                   split_pan_dataset_closed_set_v2)
+        test_split_percentage: size of the Test split as a percentage of the whole dataset
     """
     if os.path.exists(path_to_original_jsonl):
         examples = read_jsonl_examples(path_to_original_jsonl)
@@ -711,7 +705,7 @@ def split_jsonl_dataset(path_to_original_jsonl: str,
         print("File %s doesn't exist" % (path_to_original_jsonl))
 
     # split into train and test
-    train_ids, test_ids = pan_dataset_closed_train_test_split(
+    train_ids, test_ids = split_function(
         examples=examples, 
         test_split_percentage=test_split_percentage
     )
@@ -729,112 +723,92 @@ def split_jsonl_dataset(path_to_original_jsonl: str,
                 json.dump(example, f)
                 f.write('\n')
 
+def print_dataset_statistics(examples: List[Dict]):
+    stats_dict = defaultdict(int)
+    authors_dict = {}
+    for example in examples:
+        authors_dict[example['authors'][0]] = 1
+        authors_dict[example['authors'][1]] = 1
+        same_author = example['same']
+        same_fandom = example['fandoms'][0] == example['fandoms'][1]
+        if same_author:
+            if same_fandom:
+                stats_dict['sa_sf'] += 1
+            else:
+                stats_dict['sa_df'] += 1
+        else:
+            if same_fandom:
+                stats_dict['da_sf'] += 1
+            else:
+                stats_dict['da_df'] += 1
+        
+    print("Dataset size: ", len(examples))
+    print("    Same author pairs: ", stats_dict['sa_sf'] + stats_dict['sa_df'])
+    print("        Same fandom pairs: ", stats_dict['sa_sf'])
+    print("        Different fandom pairs: ", stats_dict['sa_df'])
+    print("    Different author pairs: ", stats_dict['da_sf'] + stats_dict['da_df'])
+    print("        Same fandom pairs: ", stats_dict['da_sf'])
+    print("        Different fandom pairs: ", stats_dict['da_df'])
+    print("Number of unique authors: ", len(authors_dict))
+
 
 if __name__ == '__main__':
-    PAN2020_SMALL_DATA = "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small.jsonl"
-    PAN2020_SMALL_GT = "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small-truth.jsonl"
-    PAN2020_SMALL = "/pan2020/pan20-authorship-verification-training-small/pan20-av-small.jsonl"
-    PAN2020_SMALL_TRAIN = "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-train.jsonl"
-    PAN2020_SMALL_VAL = "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-val.jsonl"
+    remote_xl_paths = {
+        "data": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large.jsonl",
+        "gt": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large-truth.jsonl",
+        "original": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large.jsonl",
+        "no_test": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-notest.jsonl",
+        "train": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-train.jsonl",
+        "val": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-val.jsonl",
+        "test": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-test.jsonl"
+    }
 
-    PAN2020_LARGE_DATA = "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large.jsonl"
-    PAN2020_LARGE_GT = "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large-truth.jsonl"
-    PAN2020_LARGE = "/pan2020/pan20-authorship-verification-training-large/pan20-av-large.jsonl"
-    PAN2020_LARGE_TRAIN = "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-train.jsonl"
-    PAN2020_LARGE_VAL = "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-val.jsonl"
+    remote_xs_paths = {
+        "data": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small.jsonl",
+        "gt": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small-truth.jsonl",
+        "original": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small.jsonl",
+        "no_test": "/pan2020/pan20-authorship-verification-training-large/pan20-av-small-notest.jsonl",
+        "train": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-train.jsonl",
+        "val": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-val.jsonl",
+        "test": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-test.jsonl"
+    }
 
-    #merge_data_and_labels(PAN2020_DATA_LARGE, PAN2020_GT_LARGE, PAN2020_FULL_DATA_LARGE)
-    #split_train_val(PAN2020_SMALL, PAN2020_SMALL_TRAIN, PAN2020_SMALL_VAL, 0.9, 'small')
-    #split_train_val(PAN2020_LARGE, PAN2020_LARGE_TRAIN, PAN2020_LARGE_VAL, 0.95, 'large')
-    #split_large_jsonl(PAN2020_SMALL_VAL, "/pan2020/pan20-authorship-verification-training-small/val")
-    # sanity checks
-    # write_jsonl_to_folder("../data/pan20-av-large.jsonl", "../data/pan20-av-large")
+    local_xl_paths = {
+        "original": "../data/pan2020_xl/pan20-av-large.jsonl",
+        "no_test": "../data/pan2020_xl/pan20-av-large-notest.jsonl",
+        "train": "../data/pan2020_xl/pan20-av-large-train.jsonl",
+        "val": "../data/pan2020_xl/pan20-av-large-val.jsonl",
+        "test": "../data/pan2020_xl/pan20-av-large-test.jsonl"
+    }
 
-    # write author data to folder
-    # split_jsonl_into_json_folder("../data/pan20-av-large.jsonl", "../data/pan20-av-large-authors")
-
-    #authors_data = get_authors_data_from_folder("../data/pan20-av-large-authors")#, num_authors=100000)
-    #sample_pairs(authors_data=authors_data, output_folder="../data/pan20-av-large_sampled")
+    local_xs_paths = {
+        "original": "../data/pan2020_xs/pan20-av-small.jsonl",
+        "no_test": "../data/pan2020_xs/pan20-av-small-notest.jsonl",
+        "train": "../data/pan2020_xs/pan20-av-small-train.jsonl",
+        "val": "../data/pan2020_xs/pan20-av-small-val.jsonl",
+        "test": "../data/pan2020_xs/pan20-av-small-test.jsonl"
+    }
     
-    # load examples
-    #examples = read_jsonl_examples("../data/pan20-av-large-no-text.jsonl")
+    # TODO: change with the appropriate paths
+    paths_dict = local_xl_paths
 
-    # split into train and test
-    # train_ids, test_ids = pan_dataset_closed_train_test_split(
-    #     examples=examples, 
+    # Split original dataset into:
+    #   - Train (pan20-av-*-notest.jsonl)
+    #   - Test (pan20-av-*-test.jsonl)
+    # We already did this once so we should keep the Test set intact
+    # split_jsonl_dataset(
+    #     path_to_original_jsonl=paths_dict['original'],
+    #     path_to_train_jsonl=paths_dict['no_test'],
+    #     path_to_test_jsonl=paths_dict['test'],
+    #     split_function=split_pan_dataset_closed_set_v1,
     #     test_split_percentage=0.05
     # )
 
+    # split Train dataset into Train and Val
     split_jsonl_dataset(
-        path_to_original_jsonl="../data/pan20-av-large.jsonl",
-        path_to_train_jsonl="../data/pan20-av-large-train.jsonl",
-        path_to_test_jsonl="../data/pan20-av-large-test.jsonl",
+        path_to_original_jsonl=paths_dict['no_test'],
+        path_to_train_jsonl=paths_dict['train'],
+        path_to_test_jsonl=paths_dict['val'],
+        split_function=split_pan_dataset_closed_set_v2,
         test_split_percentage=0.05
     )
-
-    # author_docs_len = [len(docs) for docs in authors_data.values()]
-    # print("Total documents = ", sum(author_docs_len))
-
-    # sa_sf, sa_df, da_sf, da_df = 0, 0, 0, 0
-    # root_dir = "../data/pan20-av-large_sampled"
-    # for fname in os.listdir(root_dir):
-    #     with open(os.path.join(root_dir, fname)) as fp:
-    #         entry = json.load(fp)
-    #         if entry['same']:
-    #             if entry['fandoms'][0] == entry['fandoms'][1]:
-    #                 sa_sf += 1
-    #             else:
-    #                 sa_df += 1
-    #         else:
-    #             if entry['fandoms'][0] == entry['fandoms'][1]:
-    #                 da_sf += 1
-    #             else:
-    #                 da_df += 1
-    
-    # print("Total examples: ", sa_sf+sa_df+da_sf+da_df)
-    # print("SA examples: ", sa_sf+sa_df)
-    # print("     SA examples, same fandom: ", sa_sf)
-    # print("     SA examples, diff fandom: ", sa_df)
-    # print("DA examples: ", da_sf+da_df)
-    # print("     DA examples, same fandom: ", da_sf)
-    # print("     DA examples, diff fandom: ", da_df)
-
-    # train_files = os.listdir('../data/train')
-    # val_files = os.listdir('../data/val')
-    # print("# train files = ", len(train_files))
-    # print("# val files = ", len(val_files))
-    # print("train+val files = ", len(train_files) + len(val_files))
-
-    # with open("../data/pan20-av-large-no-text.jsonl") as f:
-    #     count = 0
-    #     for line in f:
-    #         count += 1
-    # print("json size = ", count)
-    # statistics
-    # sa_sf, sa_df, da_sf, da_df = 0, 0, 0, 0
-    # da_authors = defaultdict(int)
-    # da_count = set()
-    # sa_count = set()
-    # da_pairs = 0
-    # with open("../data/pan20-av-large-no-text.jsonl") as f:
-    #     for idx, line in enumerate(f):
-    #         entry = json.loads(line)
-    #         a1 = int(entry['authors'][0])
-    #         a2 = int(entry['authors'][1])
-    #         f1 = entry['fandoms'][0]
-    #         f2 = entry['fandoms'][1]
-    #         if entry['same']:    
-    #             sa_count.add(a1)
-    #             sa_count.add(a2)
-    #         else:
-    #             if a1 > a2:
-    #                 a1, a2 = a2, a1
-    #             da_pairs += 1
-    #             da_authors[a1] += 1
-    #             da_authors[a2] += 1
-                
-    #             da_count.add(a1)
-    #             da_count.add(a2)
-
-
-                
