@@ -1,6 +1,13 @@
 
 # PAN 2020 Dataset preprocessing
 
+Overview:
+1. [PAN XL Statistics](#PAN-2020-XL-statistics)
+2. [Closed-set setup](#Closed-set-setup)
+    - [version v1](#-Version-v1)
+    - [version v2](#-Version-v2)
+3. [Open-set setup](#Open-set-setup)
+4. [Datasets](#Datasets)
 
 ## PAN 2020 XL statistics
 |  | same fandom | cross-fandom |
