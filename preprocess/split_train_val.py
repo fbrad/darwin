@@ -45,9 +45,113 @@ def remove_text_from_jsonl(input_jsonl: str, output_jsonl: str):
             json.dump(entry, out_fp)
             out_fp.write('\n')
 
+def write_jsonl_to_folder(path_to_jsonl: str, output_folder):
+    """
+    Store each JSON line in a .jsonl file in a separate .json file in ```output_folder```.
+    """
+    if not os.path.exists(output_folder):
+        print(output_folder, " folder does not exist")
+        return
+    
+    if len(os.listdir(output_folder)) > 0:
+        print(output_folder, " is not empty, abort")
+        print(os.listdir(output_folder))
+        return
+
+    duplicate_count = 0
+    with open(path_to_jsonl) as fp:
+        for idx, line in enumerate(fp):
+            if idx % 1000 == 0:
+                print(idx)
+            entry = json.loads(line)
+            entry_path = os.path.join(output_folder, entry["id"] + ".json")
+            if os.path.exists(entry_path):
+                duplicate_count += 1
+
+            with open(entry_path, "w") as out_fp:
+                json.dump(entry, out_fp)
+                out_fp.write("\n")
+
+    print("Duplicates: ", duplicate_count)
 
 
-                    
+def read_jsonl_examples(data_path: str) -> List[Dict]:
+    """
+    Reads example pairs from a ```.jsonl``` file and returns them as a list of dictionaries.
+
+    Args:
+        data_path (str): path to .jsonl file containing the documents pairs, one per line
+    Returns:
+        List[Dict]: the dataset
+    """
+    examples = []
+    with open(data_path) as fp:
+        for idx, line in enumerate(fp):
+            if idx % 10000 == 0:
+                print("[read_jsonl_examples] read %d examples" % (idx))
+            examples.append(json.loads(line))
+
+    return examples
+
+def get_authors_data_from_folder(authors_folder: str, num_authors: int=-1) -> Dict:
+    """
+    Read authors from folder into a dictionary:
+        {"$author_id": [{"fandom" : ..., "text": ....}]}
+    """
+    authors_data = defaultdict(list)
+    author_files = os.listdir(authors_folder)
+    if num_authors > 0:
+        author_files = author_files[:num_authors]
+
+    for idx, author_file in enumerate(author_files):
+        if idx % 10000 == 0:
+            print("[get_authors_data_from_folder] processed ", idx, " authors")
+        author_id = author_file[:-6]
+        with open(os.path.join(authors_folder, author_file)) as fp:
+            author_data = []
+            for line in fp:
+                author_data.append(json.loads(line))
+        authors_data[author_id] = author_data
+
+    return authors_data
+
+def get_authors_data_from_jsonl(path_to_jsonl: str, pan_authors_folder: str):
+    """
+    Get authors and their documents from the .jsonl doc pairs.
+    For each author, save its documents in ```$author_id.jsonl``` inside
+    the ```pan_authors_folder```. 
+    Args:
+        path_to_jsonl (str): [description]
+        pan_authors_folder (str): [description]
+    """
+    authors_to_docs = defaultdict(list)
+    with open(path_to_jsonl) as fp:
+        for idx, line in enumerate(fp):
+            if idx % 1000 == 0:
+                print(idx)
+            entry = json.loads(line)
+
+            a1, a2 = entry['authors'][0], entry['authors'][1]
+            d1, d2 = entry['pair'][0], entry['pair'][1]
+            f1, f2 = entry['fandoms'][0], entry['fandoms'][1]
+            for (a,f,d) in zip([a1, a2], [f1,f2], [d1, d2]):
+                duplicate = False
+                for entry in authors_to_docs[a]:
+                    if entry['text'] == d:
+                        duplicate = True
+                        break
+                if not duplicate:
+                    authors_to_docs[a].append({'fandom': f, 'text': d})
+
+    # write author data to ```pan_authors_folder```
+    for author, docs in authors_to_docs.items():
+        author_path = os.path.join(pan_authors_folder, author + ".jsonl")
+        with open(author_path, "w") as fp:
+            for doc in docs:
+                json.dump(doc, fp)
+                fp.write('\n')
+
+
 def split_pan_dataset_closed_set_v1(examples: List[Dict], 
                                     test_split_percentage: float) -> (List, List):
     """
@@ -146,25 +250,6 @@ def split_pan_dataset_closed_set_v1(examples: List[Dict],
         print("        Different fandom pairs: ", stats_dict['da_df'])
 
     return (train_ids, test_ids)
-
-
-def read_jsonl_examples(data_path: str) -> List[Dict]:
-    """
-    Reads example pairs from a ```.jsonl``` file and returns them as a list of dictionaries.
-
-    Args:
-        data_path (str): path to .jsonl file containing the documents pairs, one per line
-    Returns:
-        List[Dict]: the dataset
-    """
-    examples = []
-    with open(data_path) as fp:
-        for idx, line in enumerate(fp):
-            if idx % 10000 == 0:
-                print("[read_jsonl_examples] read %d examples" % (idx))
-            examples.append(json.loads(line))
-
-    return examples
 
 
 def split_pan_dataset_closed_set_v2(examples: List[Dict], 
@@ -372,71 +457,293 @@ def split_pan_dataset_closed_set_v2(examples: List[Dict],
     return (train_ids, test_ids)
 
 
-def write_jsonl_to_folder(path_to_jsonl: str, output_folder):
+def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict], 
+                                              test_split_percentage:float) -> (List, List):
     """
-    Store each JSON line in a .jsonl file in a separate .json file in ```output_folder```.
-    """
-    if not os.path.exists(output_folder):
-        print(output_folder, " folder does not exist")
-        return
-    
-    if len(os.listdir(output_folder)) > 0:
-        print(output_folder, " is not empty, abort")
-        print(os.listdir(output_folder))
-        return
-
-    duplicate_count = 0
-    with open(path_to_jsonl) as fp:
-        for idx, line in enumerate(fp):
-            if idx % 1000 == 0:
-                print(idx)
-            entry = json.loads(line)
-            entry_path = os.path.join(output_folder, entry["id"] + ".json")
-            if os.path.exists(entry_path):
-                duplicate_count += 1
-
-            with open(entry_path, "w") as out_fp:
-                json.dump(entry, out_fp)
-                out_fp.write("\n")
-
-    print("Duplicates: ", duplicate_count)
-
-def split_jsonl_into_json_folder(path_to_jsonl: str, pan_authors_folder: str):
-    """
-    Get authors and their documents from the .jsonl doc pairs.
-    For each author, save its documents in ```$author_id.jsonl``` inside
-    the ```pan_authors_folder```. 
+    Split dataset into train in test such that fandoms from train
+    do not appear in test.
+    Algorithm:
+        1. Let F be the fandoms of same-author (SA) pairs
+        2. Split F into two disjoint sets F_train and F_test
+        2. populate test set with SA pairs from F_test until enough examples
+        5. iterate through DA pairs (a1, a2, f1, f2)
+           add them to test set if f1 and f2 not in F_train
     Args:
-        path_to_jsonl (str): [description]
-        pan_authors_folder (str): [description]
+        examples: dataset samples read from a .jsonl file using read_jsonl_examples()
+        test_split_percentage: size of the Test split as a percentage of the whole dataset
+    
+    Returns a list of unique pair ids for each dataset split
     """
-    authors_to_docs = defaultdict(list)
-    with open(path_to_jsonl) as fp:
-        for idx, line in enumerate(fp):
-            if idx % 1000 == 0:
-                print(idx)
-            entry = json.loads(line)
 
-            a1, a2 = entry['authors'][0], entry['authors'][1]
-            d1, d2 = entry['pair'][0], entry['pair'][1]
-            f1, f2 = entry['fandoms'][0], entry['fandoms'][1]
-            for (a,f,d) in zip([a1, a2], [f1,f2], [d1, d2]):
-                duplicate = False
-                for entry in authors_to_docs[a]:
-                    if entry['text'] == d:
-                        duplicate = True
-                        break
-                if not duplicate:
-                    authors_to_docs[a].append({'fandom': f, 'text': d})
+    sa_examples = [ex for ex in examples if ex['same']]
+    random.shuffle(sa_examples)
+    sa_size = len(sa_examples)
+    sa_test_size = int(test_split_percentage * sa_size)
+    sa_train_size = sa_size - sa_test_size
 
-    # write author data to ```pan_authors_folder```
-    for author, docs in authors_to_docs.items():
-        author_path = os.path.join(pan_authors_folder, author + ".jsonl")
-        with open(author_path, "w") as fp:
-            for doc in docs:
-                json.dump(doc, fp)
-                fp.write('\n')
+    da_examples = [ex for ex in examples if not ex['same']]
+    da_sf_examples = [ex for ex in da_examples if ex['fandoms'][0] == ex['fandoms'][1]]
+    da_df_examples = [ex for ex in da_examples if ex['fandoms'][0] != ex['fandoms'][1]]
+    da_size = len(da_examples)
+    da_sf_size = len(da_sf_examples)
+    da_df_size = da_size - da_sf_size
 
+    da_sf_test_size = int(test_split_percentage * da_sf_size)
+    da_sf_train_size = da_sf_size - da_sf_test_size
+    da_df_test_size = int(test_split_percentage * da_df_size)
+    da_df_train_size = da_df_size - da_df_test_size
+
+    da_test_size = da_sf_test_size + da_df_test_size
+    da_train_size = da_sf_train_size + da_df_train_size
+
+    test_ids = []
+    # authors_g1 = {"author_id": {"ids": [$id, $id, ,,,],
+    #                             "fandoms: [f1, f2, ...]}
+    #              }
+    # fandoms_train = {"fandom": {"ids": [$id, $id, ,,,],
+    #                             "authors: [a1, a2, ...]}
+    #              }
+    #authors_g1 = defaultdict(dict)
+    fandoms_da_sf_train, fandoms_da_sf_test = defaultdict(dict), {}
+    authors_da_sf_train = {}
+    for idx, example in enumerate(da_sf_examples):
+        if idx % 10000 == 0:
+            print("[open_set_unseen_fandoms] processed %d DA-SF examples" % (idx))
+        a1, a2 = example['authors'][0], example['authors'][1]
+        f1, f2 = example['fandoms'][0], example['fandoms'][1]
+        
+        for a,f in zip([a1, a2], [f1, f1]):
+            if f not in fandoms_da_sf_train:
+                fandoms_da_sf_train[f]['ids'] = [example['id']]
+                fandoms_da_sf_train[f]['authors'] = set([a])
+            else:
+                fandoms_da_sf_train[f]['ids'].append(example['id'])
+                fandoms_da_sf_train[f]['authors'].add(a)
+
+    print("[open_set_unseen_fandoms] #fandoms in DA-SF = ", len(fandoms_da_sf_train))
+    # populate test set with DA-SF examples
+    da_sf_test_count = 0
+    authors_da_sf_test = {}
+    least_freq_fandoms_train = sorted(fandoms_da_sf_train.items(), key=lambda x: len(x[1]['ids']))
+    # for fandom, fandom_info in least_freq_fandoms_train:
+    #     print("Fandom %s size %d" % (fandom, len(fandom_info['ids'])))
+    for fandom, fandom_info in least_freq_fandoms_train:
+        for a in fandom_info['authors']:
+            authors_da_sf_test[a] = 1
+        for pair_id in fandom_info['ids']:
+            test_ids.append(pair_id)
+        
+        # move fandom info to the fandom test group
+        fandoms_da_sf_test[fandom] = fandom_info
+        da_sf_test_count += len(fandom_info['ids'])
+        if da_sf_test_count >= da_sf_test_size:
+            break
+    
+    # remove DA-SF test fandoms from DA-SF train fandoms
+    for fandom in fandoms_da_sf_test.keys():
+        if fandom in fandoms_da_sf_train:
+            del fandoms_da_sf_train[fandom]
+
+    # pull authors from DA-SF train fandoms
+    for fandom, fandom_info in fandoms_da_sf_train.items():
+        for a in fandom_info['authors']:
+            authors_da_sf_train[a] = 1
+    
+    print("[open_set_unseen_fandoms] Populated %d out of %d DA-SF test examples " \
+            % (da_sf_test_count, da_sf_test_size))
+    extra = da_sf_test_count - da_sf_test_size
+    da_sf_train_size -= extra
+    da_sf_test_size = da_sf_test_count
+
+    print("[open_set_unseen_fandoms] #fandoms in DA-SF train group ", len(fandoms_da_sf_train))
+    print("[open_set_unseen_fandoms] #fandoms in DA-SF test group ", len(fandoms_da_sf_test))
+    print("[open_set_unseen_fandoms] overlapping fandoms ", \
+            len(fandoms_da_sf_train.keys() & fandoms_da_sf_test.keys()))
+    print("[open_set_unseen_fandoms] #authors in DA-SF train group ", len(authors_da_sf_train))
+    print("[open_set_unseen_fandoms] #authors in DA-SF test group ", len(authors_da_sf_test))
+    print("[open_set_unseen_fandoms] overlapping authors ", \
+            len(authors_da_sf_train.keys() & authors_da_sf_test.keys()))
+    print("[open_set_unseen_fandoms] =======================================================")
+    
+
+    # create SA fandoms
+    # fandoms_sa_train = defaultdict(dict)
+    # for idx, example in enumerate(same_author_examples):
+    #     if idx % 10000 == 0:
+    #         print("[open_set_unseen_fandoms] processed %d SA examples" % (idx))
+    #     ex_id = example['id']
+    #     a1, a2 = example['authors'][0], example['authors'][1]
+    #     f1, f2 = example['fandoms'][0], example['fandoms'][1]
+        
+    #     for a,f in zip([a1, a1], [f1, f2]):
+    #         if f not in fandoms_sa_train:
+    #             fandoms_sa_train[f]['ids'] = [ex_id]
+    #             fandoms_sa_train[f]['authors'] = set([a])
+    #         else:
+    #             fandoms_sa_train[f]['ids'].append(ex_id)
+    #             fandoms_sa_train[f]['authors'].add(a)
+
+    # split SA fandoms in train and test
+    # print("[open_set_unseen_fandoms] splitting SA fandoms in 2 groups ")
+
+    # all examples belong to fandoms_sa_train
+    # sort dictionary from least popular fandoms to most popular
+    # move fandoms from fandoms_sa_train to fandoms_sa_test until enough SA test examples
+    # least_freq_fandoms_train = sorted(fandoms_sa_train.items(), key=lambda x: len(x[1]['ids']))
+    # for f, f_info in least_freq_fandoms_train:
+    #     for a in f_info['authors']:
+    #         authors_sa_test[a] = 1
+    #     for pair_id in f_info['ids']:
+    #         test_ids.append(pair_id)
+    #     # move fandom info to the fandom test group
+    #     fandoms_sa_test[f] = f_info
+    #     sa_test_count += len(f_info['ids'])
+    #     if sa_test_count >= sa_test_size:
+    #         break
+
+    # add SA examples to test whose fandoms overlap with DA-SF test
+    authors_sa_train, authors_sa_test = {}, {}
+    fandoms_sa_train, fandoms_sa_test = {}, {}
+    sa_test_count = 0
+    for idx, example in enumerate(sa_examples):
+        a1, a2 = example['authors'][0], example['authors'][1]
+        f1, f2 = example['fandoms'][0], example['fandoms'][1]
+        if f1 in fandoms_da_sf_test and f2 in fandoms_da_sf_test:
+            # adding example to SA test pairs
+            test_ids.append(example['id'])
+            sa_test_count += 1
+            # update fandoms and authors stats
+            fandoms_sa_test[f1] = 1
+            fandoms_sa_test[f2] = 1
+            authors_sa_test[a1] = 1
+            # if sa_test_count == sa_test_size:
+            #     break
+
+    # update counts
+    print("[open_set_unseen_fandoms] Populated %d out of %d SA test examples " % (sa_test_count, sa_test_size))
+    extra = sa_test_count - sa_test_size
+    sa_train_size -= extra
+    sa_test_size = sa_test_count
+    test_size_so_far = sa_test_size + da_sf_test_size
+    assert len(test_ids) == test_size_so_far, \
+          "len(test_ids) = %d, test_size_so_far = %d" % (len(test_ids), test_size_so_far)
+
+    # create author and fandom SA train stats
+    for idx, example in enumerate(sa_examples):
+        if example['id'] in test_ids:
+            continue
+        a1, a2 = example['authors'][0], example['authors'][1]
+        f1, f2 = example['fandoms'][0], example['fandoms'][1]
+        fandoms_sa_train[f1] = 1
+        fandoms_sa_train[f2] = 1
+        authors_sa_train[a1] = 1
+
+    # remove test fandoms from train fandoms group
+    # for f in fandoms_sa_test.keys():
+    #     if f in fandoms_sa_train:
+    #         del fandoms_sa_train[f]
+
+    # pull authors from train fandom
+    # for f, f_info in fandoms_sa_train.items():
+    #     for a in f_info['authors']:
+    #         authors_sa_train[a] = 1
+
+    print("[open_set_unseen_fandoms] #fandoms in SA train group ", len(fandoms_sa_train))
+    print("[open_set_unseen_fandoms] #fandoms in SA test group ", len(fandoms_sa_test))
+    print("[open_set_unseen_fandoms] overlapping fandoms ", \
+            len(fandoms_sa_train.keys() & fandoms_sa_test.keys()))
+    print("[open_set_unseen_fandoms] #authors in SA train group ", len(authors_sa_train))
+    print("[open_set_unseen_fandoms] #authors in SA test group ", len(authors_sa_test))
+    print("[open_set_unseen_fandoms] overlapping authors ", \
+            len(authors_sa_train.keys() & authors_sa_test.keys()))
+
+    print("[open_set_unseen_fandoms] =======================================================")
+    print("[open_set_unseen_fandoms] adding DA-DF pairs to test set")
+    da_test_count = 0
+    fandoms_da_df_train, fandoms_da_df_test = {}, {}
+    authors_da_df_train, authors_da_df_test = {}, {}
+    # update fandoms statistics for DA pairs
+    # for ex in da_sf_examples:
+    #     fandoms_da_sf[ex['fandoms'][0]] = 1
+    # for ex in da_df_examples:
+    #     fandoms_da_df[ex['fandoms'][0]] = 1
+    #     fandoms_da_df[ex['fandoms'][1]] = 1
+    
+    # print("[open_set_unseen_fandoms] #fandoms in DA-SF pairs", len(fandoms_da_sf.keys()))
+    # print("[open_set_unseen_fandoms] #fandoms in DA-DF pairs", len(fandoms_da_df.keys()))
+    # print("[open_set_unseen_fandoms] #inters(DA-SF, DA-DF)", len(fandoms_da_sf.keys()&fandoms_da_df.keys()))
+    # print("[open_set_unseen_fandoms] DA-SF = %d, DA-DF = %d" % (len(da_sf_examples), len(da_df_examples)))
+    #random.shuffle(da_examples)
+
+    # add DA-DF examples to test set
+    da_df_test_count = 0
+    for idx, example in enumerate(da_df_examples):
+        a1, a2 = example['authors'][0], example['authors'][1]
+        f1, f2 = example['fandoms'][0], example['fandoms'][1]
+        if f1 in fandoms_da_sf_test and f2 in fandoms_da_sf_test:
+            # adding example to DA-DF test pairs
+            test_ids.append(example['id'])
+            da_df_test_count += 1
+            fandoms_da_df_test[f1], fandoms_da_df_test[f2] = 1, 1
+            authors_da_df_test[a1], authors_da_df_test[a2] = 1, 1
+            #if da_test_count == da_test_size:
+            #    break
+
+    # create DA-DF train fandoms and train authors stats
+    for idx, example in enumerate(da_df_examples):
+        if example['id'] in test_ids:
+            continue
+        a1, a2 = example['authors'][0], example['authors'][1]
+        f1, f2 = example['fandoms'][0], example['fandoms'][1]
+        fandoms_da_df_train[f1] = 1
+        fandoms_da_df_train[f2] = 1
+        authors_da_df_train[a1] = 1
+
+    print("[open_set_unseen_fandoms] Populated %d out of %d DA-SF test examples " \
+          % (da_df_test_count, da_df_test_size))
+
+    print("[open_set_unseen_fandoms] #fandoms in DA-DF train group ", len(fandoms_da_df_train))
+    print("[open_set_unseen_fandoms] #fandoms in DA-DF test group ", len(fandoms_da_df_test))
+    print("[open_set_unseen_fandoms] overlapping fandoms ", \
+            len(fandoms_da_df_train.keys() & fandoms_da_df_test.keys()))
+    print("[open_set_unseen_fandoms] #authors in DA-DF train group ", len(authors_da_df_train))
+    print("[open_set_unseen_fandoms] #authors in DA-DF test group ", len(authors_da_df_test))
+    print("[open_set_unseen_fandoms] overlapping authors ", \
+            len(authors_da_df_train.keys() & authors_da_df_test.keys()))
+      
+    test_ids_map = {test_id:1 for test_id in test_ids}
+    train_ids = [example['id'] for example in examples if example['id'] not in test_ids_map]
+    train_ids_map = {train_id:1 for train_id in train_ids}
+
+    # statistics
+    train_stats = defaultdict(int)
+    test_stats = defaultdict(int)
+    for example in examples:
+        same_author = example['same']
+        same_fandom = example['fandoms'][0] == example['fandoms'][1]
+        stats_dict = train_stats if example['id'] in train_ids_map else test_stats
+        if same_author:
+            if same_fandom:
+                stats_dict['sa_sf'] += 1
+            else:
+                stats_dict['sa_df'] += 1
+        else:
+            if same_fandom:
+                stats_dict['da_sf'] += 1
+            else:
+                stats_dict['da_df'] += 1
+    
+    for split_name, stats_dict in zip(["TRAIN", "TEST"], [train_stats, test_stats]):
+        split_ids = train_ids if split_name == 'TRAIN' else test_ids
+        print("%s size: %d" % (split_name, len(split_ids)))
+        print("    Same author pairs: ", stats_dict['sa_sf'] + stats_dict['sa_df'])
+        print("        Same fandom pairs: ", stats_dict['sa_sf'])
+        print("        Different fandom pairs: ", stats_dict['sa_df'])
+        print("    Different author pairs: ", stats_dict['da_sf'] + stats_dict['da_df'])
+        print("        Same fandom pairs: ", stats_dict['da_sf'])
+        print("        Different fandom pairs: ", stats_dict['da_df'])
+
+        
 
 def make_two_author_groups(authors_source: Union[str, Dict]) -> (Dict, Dict):
     """
@@ -490,27 +797,6 @@ def make_two_author_groups(authors_source: Union[str, Dict]) -> (Dict, Dict):
     
     return single_doc_authors, even_doc_authors
 
-def get_authors_data_from_folder(authors_folder: str, num_authors: int=-1) -> Dict:
-    """
-    Read authors from folder into a dictionary:
-        {"$author_id": [{"fandom" : ..., "text": ....}]}
-    """
-    authors_data = defaultdict(list)
-    author_files = os.listdir(authors_folder)
-    if num_authors > 0:
-        author_files = author_files[:num_authors]
-
-    for idx, author_file in enumerate(author_files):
-        if idx % 10000 == 0:
-            print("[get_authors_data_from_folder] processed ", idx, " authors")
-        author_id = author_file[:-6]
-        with open(os.path.join(authors_folder, author_file)) as fp:
-            author_data = []
-            for line in fp:
-                author_data.append(json.loads(line))
-        authors_data[author_id] = author_data
-
-    return authors_data
 
 def clean_after_sampling(author_id: str, 
                          author_docs: List[Dict], 
@@ -723,6 +1009,7 @@ def split_jsonl_dataset(path_to_original_jsonl: str,
                 json.dump(example, f)
                 f.write('\n')
 
+
 def print_dataset_statistics(examples: List[Dict]):
     stats_dict = defaultdict(int)
     authors_dict = {}
@@ -805,10 +1092,29 @@ if __name__ == '__main__':
     # )
 
     # split Train dataset into Train and Val
-    split_jsonl_dataset(
-        path_to_original_jsonl=paths_dict['no_test'],
-        path_to_train_jsonl=paths_dict['train'],
-        path_to_test_jsonl=paths_dict['val'],
-        split_function=split_pan_dataset_closed_set_v2,
-        test_split_percentage=0.05
-    )
+    # split_jsonl_dataset(
+    #     path_to_original_jsonl=paths_dict['no_test'],
+    #     path_to_train_jsonl=paths_dict['train'],
+    #     path_to_test_jsonl=paths_dict['val'],
+    #     split_function=split_pan_dataset_closed_set_v2,
+    #     test_split_percentage=0.05
+    # )
+
+    # test_examples = read_jsonl_examples('../data/pan2020_xl/backup/xl/v2_split/pan20-av-large-test.jsonl')
+    # test_authors = {}
+    # for example in test_examples:
+    #     a1 = example['authors'][0]
+    #     a2 = example['authors'][1]
+    #     test_authors[a1] = 1
+    #     test_authors[a2] = 1
+
+    train_authors = {}
+    #train_examples = read_jsonl_examples('../data/pan2020_xl/backup/xl/v2_split/pan20-av-large-test.jsonl')
+    train_examples = read_jsonl_examples('../data/pan2020_xl/pan20-av-large.jsonl')
+    split_pan_dataset_open_set_unseen_fandoms(train_examples, 0.05)
+
+    # train_set = set(train_authors)
+    # test_set = set(test_authors)
+    # print("Number of authors in train set: ", len(train_set))
+    # print("Number of authors in test set: ", len(test_set))
+    # print("Number of overlapping authors: ", len(test_set.intersection(train_set)))
