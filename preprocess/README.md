@@ -1,6 +1,5 @@
 
-
-# PAN 2020 Dataset statistics
+# PAN 2020 Dataset preprocessing
 
 
 ## PAN 2020 XL statistics
@@ -21,7 +20,7 @@ We now detail the closed-set and open-set setups. In both setups, we split the X
 In the closed-set setup authors of same-author pairs in the validation/test set are guaranteed to appear in the training set. However, this is difficult to achieve for the different-author pairs of the PAN 2020 dataset, as they span a large number of authors with few occurences each.
 
 ### Files
-Download [```pan2020.zip```](https://drive.google.com/file/d/18UPhYsdtFa8ObD0M6AeMdLxJ1XH42vHQ/view?usp=sharing) and unzip it. This is the structure of its content: 
+Download [```pan2020_closed_set_splits.zip```](https://drive.google.com/file/d/18UPhYsdtFa8ObD0M6AeMdLxJ1XH42vHQ/view?usp=sharing) and unzip it. This is the structure of its content: 
 ```
 xl/
    v1_split/
@@ -123,7 +122,7 @@ To split the PAN 2020 large dataset (```pan20-av-large-notest.jsonl```) into tra
 cd preprocess
 python split_train_val.py
 ```
-Make sure to specify the correct paths:
+Make sure to specify the correct paths and split function:
 ```
     # split Train dataset into Train and Val
     split_jsonl_dataset(
@@ -137,17 +136,51 @@ Make sure to specify the correct paths:
 
 
 ## Open-set setup
-We make sure that authors or fandoms in the training split do no appear in the validation split.
+In the open-set setup, authors and fandoms in the test set do not appear in the training set. However, this is difficult to achieve for the PAN 2020 dataset, so we split it into train and val/test sets such that: 
+ - authors of same-author (SA) pairs in the test set do not appear in SA training pairs 
+ - some authors (<5%) of different-author (DA) pairs in the test set may appear in the DA training pairs
+ - most of the fandoms in the test set appear in the training set 
 
-| Dataset      | Number of pairs | Positive | Negative
-| ----------- | ----------- | ---------| --------|
-| PAN 2020 XL | 275565 | 147778 | 127787 |
-| PAN 2020 XL train | TODO | TODO | TODO |
-| PAN 2020 XL val | TODO | TODO | TODO |
-| PAN 2020 XS | 52601 | 27834 | 24767 |
-| PAN 2020 XS train | TODO | TODO | TODO |
-| PAN 2020 XS val | TODO | TODO | TODO |
 
+### Files
+Download [```pan2020_open_set_splits.zip```](https://drive.google.com/file/d/1N_Rst0EMRKGPtFpc5SRMmrvN1flFxu0J/view?usp=sharing) and unzip it. This is the structure of its content: 
+```
+xl/
+   open_set/
+            pan20-av-large-test.jsonl
+            pan20-av-large-notest.jsonl
+xs/
+   open_set/
+            pan20-av-small-test.jsonl
+            pan20-av-small-notest.jsonl
+```
+
+
+Here are some dataset statistics:
+|dataset | filename | size | SA / SA-SF / SA-DF | DA / DA-SF / DA-DF | 
+|--------|----------|------|----|----|
+|PAN 2020 large - original| ```pan20-av-large.jsonl``` | 275565 | - | - | -|
+|PAN 2020 large - test | ```pan20-av-large-test.jsonl``` | 13777 | 7388/0/7388 | 6389/2061/4328 |
+|PAN 2020 large - w/o test| ```pan20-av-large-no-test.jsonl``` | 261788 | 140390/0/140390 | 121398/21070/100328 |
+|PAN 2020 large - train | ```pan20-av-large-train.jsonl``` | 248699 | 133367/0/133367 | 115332/18840/96492 |
+|PAN 2020 large - val | ```pan20-av-large-val.jsonl``` | 13089 | 7023/0/7023 | 6066/2230/3836 |  
+
+To split the PAN 2020 large dataset (```pan20-av-large-notest.jsonl```) into train and validation splits, call the ```split_jsonl_dataset``` function in ```preprocess/split_train_val.py```:
+```
+cd preprocess
+python split_train_val.py
+```
+Make sure to specify the correct paths and split function:
+```
+    # split Train dataset into Train and Val
+    split_jsonl_dataset(
+        path_to_original_jsonl=pan20-av-notest.jsonl,
+        path_to_train_jsonl=pan20-av-large-train.jsonl,
+        path_to_test_jsonl=pan20-av-large-val,
+        split_function=split_pan_dataset_open_set_unseen_authors,
+        test_split_percentage=0.05
+    )
+```
 
 ## Datasets
 | Dataset      | Number of pairs | Positive | Negative
