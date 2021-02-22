@@ -62,7 +62,7 @@ def write_jsonl_to_folder(path_to_jsonl: str, output_folder):
     with open(path_to_jsonl) as fp:
         for idx, line in enumerate(fp):
             if idx % 1000 == 0:
-                print(idx)
+                print("[write_jsonl_to_folder] wrote %d .json files to %s", % (idx, output_folder))
             entry = json.loads(line)
             entry_path = os.path.join(output_folder, entry["id"] + ".json")
             if os.path.exists(entry_path):
@@ -1225,7 +1225,19 @@ if __name__ == '__main__':
     }
     
     # TODO: change with the appropriate paths
-    paths_dict = local_xl_paths
+    # paths_dict = {
+    #     "no_test": "../data/raw/closed_splits/xs/v1_split/pan20-av-small-notest.jsonl",
+    #     "test": "../data/raw/closed_splits/xs/v1_split/pan20-av-small-test.jsonl",
+    #     "train": "../data/raw/closed_splits/xs/v1_split/pan20-av-small-train.jsonl",
+    #     "val": "../data/raw/closed_splits/xs/v1_split/pan20-av-small-val.jsonl",
+    # }
+
+    paths_dict = {
+        "no_test": "../data/pan2020_xs/pan20-av-small-notest.jsonl",
+        "test": "../data/pan2020_xs/pan20-av-small-test.jsonl",
+        "train": "../data/pan2020_xs/pan20-av-small-train.jsonl",
+        "val": "../data/pan2020_xs/pan20-av-small-val.jsonl",
+    }
 
     # Split original dataset into:
     #   - Train (pan20-av-*-notest.jsonl)
@@ -1240,13 +1252,16 @@ if __name__ == '__main__':
     # )
 
     # split Train dataset into Train and Val
-    split_jsonl_dataset(
-        path_to_original_jsonl=paths_dict['no_test'],
-        path_to_train_jsonl=paths_dict['train'],
-        path_to_test_jsonl=paths_dict['val'],
-        split_function=split_pan_dataset_open_set_unseen_authors,
-        test_split_percentage=0.05
-    )
+    # split_jsonl_dataset(
+    #     path_to_original_jsonl=paths_dict['no_test'],
+    #     path_to_train_jsonl=paths_dict['train'],
+    #     path_to_test_jsonl=paths_dict['val'],
+    #     split_function=split_pan_dataset_open_set_unseen_authors,
+    #     test_split_percentage=0.05
+    # )
+    write_jsonl_to_folder(paths_dict['train'], "../data/pan2020_xs/pan20-av-small-train")
+    write_jsonl_to_folder(paths_dict['val'], "../data/pan2020_xs/pan20-av-small-val")
+    write_jsonl_to_folder(paths_dict['test'], "../data/pan2020_xs/pan20-av-small-test")
 
     # Ignore lines below
     #train_examples = read_jsonl_examples('../data/pan2020_xl/backup/xl/v2_split/pan20-av-large-test.jsonl')

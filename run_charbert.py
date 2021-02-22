@@ -6,24 +6,45 @@ from transformers.models.bert import BertForSequenceClassification
 from torch.utils.data import DataLoader
 from models.character_bert import CharacterBertModel
 from dataset_readers.pan2020_dataset import Pan2020Dataset
-from utils.training import train
+from utils.training import train, PanTrainer
+from utils.metrics import evaluate_all
 from utils.character_cnn import CharacterIndexer
 from utils.misc import set_seed, parse_args
+import numpy as np
+from scipy.special import softmax
 import sys
 import math
 import torch
 import logging
 import os
 from tqdm import tqdm
+from typing import Dict
+from transformers.trainer_utils import EvalPrediction
+from transformers.integrations import TensorBoardCallback
 
 # def on_step_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
 #     print("[on_step_begin] kwargs = ", kwargs)
 
+def compute_pan_metrics(prediction: EvalPrediction) -> Dict:
+    # num_samples x 2
+    prediction_logits = prediction.predictions
+    # num_samples
+    label_ids = prediction.label_ids.squeeze()
+    #num_samples
+    prediction_probs = softmax(prediction_logits, axis=1)[:,1]
+
+    #preds_list = np.argmax(prediction_probs, axis=1)
+    #print("[compute_pan_metrics] prediction_probs = ", prediction_probs)
+    #print("[compute_pan_metrics] prediction_probs = ", prediction_probs.shape)
+    #print("[compute_pan_metrics] label_ids = ", label_ids.shape)
+    
+    return evaluate_all(label_ids, prediction_probs)
+
 if __name__ == '__main__':
     #DATA_TRAIN_PATH = "/pan2020/pan20-authorship-verification-training-small/train"
     #DATA_VAL_PATH = "/pan2020/pan20-authorship-verification-training-small/val"
-    DATA_TRAIN_PATH = "data/train"
-    DATA_VAL_PATH = "data/val"
+    DATA_TRAIN_PATH = "data/pan2020_xs/pan20-av-small-train"
+    DATA_VAL_PATH = "data/pan2020_xs/pan20-av-small-val"
     args = parse_args()
     args.debug = True
     args.output_dir = "output/character_bert"
@@ -68,14 +89,14 @@ if __name__ == '__main__':
         os.path.join('pretrained_models', "general_character_bert"),
         num_labels=2
     )
+    config.update({"return_dict": False})
+    print("config.return_dict = ", config.return_dict)
     model = BertForSequenceClassification(config=config)
     model.bert = CharacterBertModel.from_pretrained(
         os.path.join('pretrained_models', "general_character_bert"),
         config=config
     )
     model.to(args.device)
-
-
 
     # global_step, train_loss, best_val_metric, best_val_epoch = train(
     #     args=args,
@@ -88,7 +109,7 @@ if __name__ == '__main__':
     train_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True,
-        do_train=False,
+        do_train=True,
         do_eval=False,
         do_predict=False,
         evaluation_strategy="epoch",
@@ -104,14 +125,15 @@ if __name__ == '__main__':
         lr_scheduler_type="linear",
         warmup_steps=num_warmup_steps,
         logging_dir=args.output_dir,
-        label_names="labels",
+        logging_steps=1,
+        #label_names="labels",
         #load_best_model_at_end=False,
         #metric_for_best_model='overall',
         #greater_is_better=True,
     )
 
     # TODO: Use Trainer from huggingface
-    trainer = Trainer(
+    trainer = PanTrainer(
         model=model,
         args=train_args,
         #data_collator=None,
@@ -119,8 +141,8 @@ if __name__ == '__main__':
         eval_dataset=val_dataset,
         #tokenizer=None,
         #model_init=None,
-        #compute_metrics=eval_pan,
-        callbacks=None,
+        compute_metrics=compute_pan_metrics,
+        #callbacks=TensorBoardCallback,
         #optimizers=None
     )
     train_results = trainer.train()

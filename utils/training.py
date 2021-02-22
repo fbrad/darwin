@@ -13,11 +13,56 @@ import sklearn.metrics as sklearn_metrics
 import torch
 from torch.nn.functional import softmax
 from torch.utils.data import SequentialSampler, RandomSampler, DataLoader
+from torch.utils.data.dataset import Dataset
 from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers.trainer import Trainer
+from transformers.modeling_utils import PreTrainedModel
+from transformers.training_args import TrainingArguments
+from transformers.trainer_callback import TrainerCallback
+from transformers.trainer_utils import EvalPrediction
+from transformers.data.data_collator import DataCollator
 from utils.metrics import evaluate_all
 from utils.misc import set_seed
 import logging
+from typing import Union, Optional, Callable, Tuple, Dict, List
 
+class PanTrainer(Trainer):
+    def __init__(self,
+        model: Union[PreTrainedModel, torch.nn.Module] = None,
+        args: TrainingArguments = None,
+        data_collator: Optional[DataCollator] = None,
+        train_dataset: Optional[Dataset] = None,
+        eval_dataset: Optional[Dataset] = None,
+        tokenizer: Optional["PreTrainedTokenizerBase"] = None,
+        model_init: Callable[[], PreTrainedModel] = None,
+        compute_metrics: Optional[Callable[[EvalPrediction], Dict]] = None,
+        callbacks: Optional[List[TrainerCallback]] = None,
+        optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
+    ):
+        super().__init__(model=model, args=args, data_collator=data_collator, 
+            train_dataset=train_dataset, eval_dataset=eval_dataset, tokenizer=tokenizer, 
+            model_init=model_init, compute_metrics=compute_metrics, callbacks=callbacks,
+            optimizers=optimizers
+        )
+
+    # def evaluate(
+    #     self,
+    #     eval_dataset: Optional[Dataset] = None,
+    #     ignore_keys: Optional[List[str]] = None,
+    #     metric_key_prefix: str = "eval",
+    # ) -> Dict[str, float]:
+    #     metrics = super().evaluate(eval_dataset=eval_dataset, 
+    #         ignore_keys=ignore_keys, 
+    #         metric_key_prefix=metric_key_prefix
+    #     )
+    #     #print("[PanTrainer:evalute] metrics = ", metrics)
+    #     return metrics
+
+    # def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch):
+    #     print("haha")
+    #     super()._maybe_log_save_evaluate(tr_loss, model, trial, epoch)
+    #     if self.control.should_log:
+    #         print("[PanTrainer._maybe_log...] self.state = ", self.state)
 
 def train(args, train_dataset, eval_dataset, model):
     """ Trains the given model on the given dataset. """
