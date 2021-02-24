@@ -6,7 +6,7 @@ from transformers.models.bert import BertForSequenceClassification
 from torch.utils.data import DataLoader
 from models.character_bert import CharacterBertModel
 from dataset_readers.pan2020_dataset import Pan2020Dataset
-from utils.training import train, PanTrainer
+from utils.training import train, PanTrainer, LogCallback
 from utils.metrics import evaluate_all
 from utils.character_cnn import CharacterIndexer
 from utils.misc import set_seed, parse_args
@@ -21,9 +21,6 @@ from tqdm import tqdm
 from typing import Dict
 from transformers.trainer_utils import EvalPrediction
 from transformers.integrations import TensorBoardCallback
-
-# def on_step_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-#     print("[on_step_begin] kwargs = ", kwargs)
 
 def compute_pan_metrics(prediction: EvalPrediction) -> Dict:
     # num_samples x 2
@@ -47,7 +44,9 @@ if __name__ == '__main__':
     DATA_VAL_PATH = "data/pan2020_xs/pan20-av-small-val"
     args = parse_args()
     args.debug = True
-    args.output_dir = "output/character_bert"
+    args.output_dir = "output/run3"
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
 
     # Set up logging
     logging.basicConfig(
@@ -106,6 +105,7 @@ if __name__ == '__main__':
     # )
     #logging.info("global_step = %s, average training loss = %s", global_step, train_loss)
     #logging.info("Best performance: Epoch=%d, Value=%s", best_val_epoch, best_val_metric)
+    
     train_args = TrainingArguments(
         output_dir=args.output_dir,
         overwrite_output_dir=True,
@@ -125,15 +125,15 @@ if __name__ == '__main__':
         lr_scheduler_type="linear",
         warmup_steps=num_warmup_steps,
         logging_dir=args.output_dir,
-        logging_steps=1,
+        logging_steps=2,
         #label_names="labels",
-        #load_best_model_at_end=False,
+        load_best_model_at_end=True,
         #metric_for_best_model='overall',
-        #greater_is_better=True,
-    )
+        greater_is_better=True,
+    )  
 
     # TODO: Use Trainer from huggingface
-    trainer = PanTrainer(
+    trainer = Trainer(
         model=model,
         args=train_args,
         #data_collator=None,
@@ -142,11 +142,12 @@ if __name__ == '__main__':
         #tokenizer=None,
         #model_init=None,
         compute_metrics=compute_pan_metrics,
-        #callbacks=TensorBoardCallback,
+        callbacks=[LogCallback]
         #optimizers=None
     )
     train_results = trainer.train()
     print(train_results)
-    val_results = trainer.evaluate()
-    print(val_results)
+    
+    #val_results = trainer.evaluate()
+    #print(val_results)
 

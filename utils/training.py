@@ -18,13 +18,33 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 from transformers.trainer import Trainer
 from transformers.modeling_utils import PreTrainedModel
 from transformers.training_args import TrainingArguments
-from transformers.trainer_callback import TrainerCallback
+from transformers.trainer_callback import TrainerCallback, TrainerState, TrainerControl, TrainingArguments
 from transformers.trainer_utils import EvalPrediction
 from transformers.data.data_collator import DataCollator
 from utils.metrics import evaluate_all
 from utils.misc import set_seed
 import logging
 from typing import Union, Optional, Callable, Tuple, Dict, List
+
+
+class LogCallback(TrainerCallback):
+    def on_epoch_begin(self, args, state, control, **kwargs):
+        self._epoch_loss = 0.0
+        self._epoch_steps = 0
+
+    def on_log(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+        """
+        Unfortunately, this events gets called after TensorboardCallBack.on_log(), so the 
+        "epoch_loss" never gets logged.
+        """
+        if not control.should_evaluate and 'loss' in kwargs['logs']:
+            logs = kwargs['logs']
+            self._epoch_loss += logs['loss']
+            self._epoch_steps += 1
+            if logs['epoch'].is_integer():
+                logs['loss_epoch'] = self._epoch_loss / self._epoch_steps
+                self._epoch_loss = 0.0
+                self._epoch_steps = 0
 
 class PanTrainer(Trainer):
     def __init__(self,
