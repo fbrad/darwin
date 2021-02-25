@@ -81,8 +81,29 @@ import json
 import os
 
 import numpy as np
+from transformers.trainer_utils import EvalPrediction
+from typing import Dict
+from scipy.special import softmax
 from sklearn.metrics import roc_auc_score, f1_score
 
+def compute_pan_metrics(prediction: EvalPrediction) -> Dict:
+    """
+    Used by Huggingface Trainer. Calls evaluate_all function provided
+    by the PAN organisers.
+    """
+    # num_samples x 2
+    prediction_logits = prediction.predictions
+    # num_samples
+    label_ids = prediction.label_ids.squeeze()
+    #num_samples
+    prediction_probs = softmax(prediction_logits, axis=1)[:,1]
+
+    #preds_list = np.argmax(prediction_probs, axis=1)
+    #print("[compute_pan_metrics] prediction_probs = ", prediction_probs)
+    #print("[compute_pan_metrics] prediction_probs = ", prediction_probs.shape)
+    #print("[compute_pan_metrics] label_ids = ", label_ids.shape)
+    
+    return evaluate_all(label_ids, prediction_probs)
 
 def binarize(y, threshold=0.5):
     y = np.array(y)

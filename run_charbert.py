@@ -7,11 +7,10 @@ from torch.utils.data import DataLoader
 from models.character_bert import CharacterBertModel
 from dataset_readers.pan2020_dataset import Pan2020Dataset
 from utils.training import train, PanTrainer, LogCallback
-from utils.metrics import evaluate_all
+from utils.metrics import evaluate_all, compute_pan_metrics
 from utils.character_cnn import CharacterIndexer
 from utils.misc import set_seed, parse_args
 import numpy as np
-from scipy.special import softmax
 import sys
 import math
 import torch
@@ -21,34 +20,19 @@ from tqdm import tqdm
 from typing import Dict
 from transformers.trainer_utils import EvalPrediction
 from transformers.integrations import TensorBoardCallback
+import json
 
-def compute_pan_metrics(prediction: EvalPrediction) -> Dict:
-    # num_samples x 2
-    prediction_logits = prediction.predictions
-    # num_samples
-    label_ids = prediction.label_ids.squeeze()
-    #num_samples
-    prediction_probs = softmax(prediction_logits, axis=1)[:,1]
 
-    #preds_list = np.argmax(prediction_probs, axis=1)
-    #print("[compute_pan_metrics] prediction_probs = ", prediction_probs)
-    #print("[compute_pan_metrics] prediction_probs = ", prediction_probs.shape)
-    #print("[compute_pan_metrics] label_ids = ", label_ids.shape)
-    
-    return evaluate_all(label_ids, prediction_probs)
-
-if __name__ == '__main__':
-    #DATA_TRAIN_PATH = "/pan2020/pan20-authorship-verification-training-small/train"
-    #DATA_VAL_PATH = "/pan2020/pan20-authorship-verification-training-small/val"
-    DATA_TRAIN_PATH = "data/pan2020_xs/pan20-av-small-train"
-    DATA_VAL_PATH = "data/pan2020_xs/pan20-av-small-val"
+if __name__ == '__main__':   
+    # read config file and merge with arguments
     args = parse_args()
-    args.debug = True
-    args.output_dir = "output/run3"
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
+    config_args = json.load(open(args.config))
+    for k,v in config_args.items():
+        setattr(args, k, v)
 
     # Set up logging
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
     logging.basicConfig(
         filename=os.path.join(args.output_dir, 'output.log'),
         format="%(asctime)s - %(levelname)s - %(filename)s -   %(message)s",
@@ -57,6 +41,7 @@ if __name__ == '__main__':
         force=True
     )
     logging.getLogger().setLevel(logging.INFO)
+    logging.info('Arguments: %s ', args)
 
     # set up tokenizer
     tokenizer = BertTokenizer.from_pretrained(
@@ -67,13 +52,13 @@ if __name__ == '__main__':
     tokenization_function = tokenizer.tokenize
     
     train_dataset = Pan2020Dataset(
-        DATA_TRAIN_PATH, 
+        args.train_path, 
         tokenizer=tokenizer, 
         indexer=characters_indexer, 
         debug=args.debug
     )
     val_dataset = Pan2020Dataset(
-        DATA_VAL_PATH, 
+        args.val_path, 
         tokenizer=tokenizer, 
         indexer=characters_indexer,
         debug=args.debug
@@ -89,7 +74,6 @@ if __name__ == '__main__':
         num_labels=2
     )
     config.update({"return_dict": False})
-    print("config.return_dict = ", config.return_dict)
     model = BertForSequenceClassification(config=config)
     model.bert = CharacterBertModel.from_pretrained(
         os.path.join('pretrained_models', "general_character_bert"),
@@ -97,6 +81,7 @@ if __name__ == '__main__':
     )
     model.to(args.device)
 
+    # train model using custom train/eval loop
     # global_step, train_loss, best_val_metric, best_val_epoch = train(
     #     args=args,
     #     train_dataset=train_dataset,
@@ -112,11 +97,11 @@ if __name__ == '__main__':
         do_train=True,
         do_eval=False,
         do_predict=False,
+        disable_tqdm=True,
         evaluation_strategy="epoch",
         per_device_train_batch_size=args.train_batch_size,
         per_device_eval_batch_size=args.eval_batch_size,
         gradient_accumulation_steps=1,
-        #eval_accumulation_steps=int,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         adam_epsilon=args.adam_epsilon,
@@ -125,14 +110,13 @@ if __name__ == '__main__':
         lr_scheduler_type="linear",
         warmup_steps=num_warmup_steps,
         logging_dir=args.output_dir,
-        logging_steps=2,
-        #label_names="labels",
+        logging_steps=10,
         load_best_model_at_end=True,
-        #metric_for_best_model='overall',
-        greater_is_better=True,
-    )  
+        metric_for_best_model='overall',
+        greater_is_better=True
+    )
 
-    # TODO: Use Trainer from huggingface
+    # train model using Huggingface's Trainer
     trainer = Trainer(
         model=model,
         args=train_args,
@@ -141,12 +125,13 @@ if __name__ == '__main__':
         eval_dataset=val_dataset,
         #tokenizer=None,
         #model_init=None,
-        compute_metrics=compute_pan_metrics,
-        callbacks=[LogCallback]
+        compute_metrics=compute_pan_metrics
+        #callbacks=[LogCallback]
         #optimizers=None
     )
     train_results = trainer.train()
     print(train_results)
+    logging.info("train results: %s", train_results)
     
     #val_results = trainer.evaluate()
     #print(val_results)

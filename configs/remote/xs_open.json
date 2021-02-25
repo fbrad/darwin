@@ -1,0 +1,7 @@
+{
+  "debug": true,
+  "output_dir": "/data/darwin/xs_open",
+  "train_path": "/pan2020/open_split/xs/pan20-av-small-train",
+  "val_path": "/pan2020/open_split/xs/pan20-av-small-val",
+  "test_path": "/pan2020/open_split/xs/pan20-av-small-test"
+}

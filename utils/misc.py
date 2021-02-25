@@ -26,6 +26,21 @@ def parse_args():
     AVAILABLE_MODELS = ['general_character_bert', 'medical_character_bert', 'general_bert', 'medical_bert']
     """ Parse command line arguments and initialize experiment. """
     parser = argparse.ArgumentParser()
+    
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/remote/xs_closed_v1.json",
+        help="Config file (overrides other arguments)"
+    )
+
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="output/xs_closed_v1",
+        help="Directory where model checkpoints and configs get saved"
+    )
+
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -59,7 +74,7 @@ def parse_args():
     parser.add_argument(
         "--num_train_epochs",
         type=int,
-        default=3,
+        default=20,
         help="Number of training epochs."
     )
     parser.add_argument(
