@@ -3,7 +3,10 @@ from transformers import BertTokenizerFast, BertTokenizer, TrainingArguments, Tr
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.models.auto.modeling_auto import AutoModel, AutoModelForSequenceClassification
 from transformers.models.bert import BertForSequenceClassification
+from transformers import BertModel
+from transformers.optimization import get_constant_schedule
 from torch.utils.data import DataLoader
+from torch.optim import SGD
 from models.character_bert import CharacterBertModel
 from dataset_readers.pan2020_dataset import Pan2020Dataset
 from utils.training import train, PanTrainer, LogCallback
@@ -46,40 +49,74 @@ if __name__ == '__main__':
     # set up tokenizer
     tokenizer = BertTokenizer.from_pretrained(
         os.path.join('pretrained_models', 'bert-base-uncased'),
-        do_lower_case=args.do_lower_case)
-    tokenizer = tokenizer.basic_tokenizer
-    characters_indexer = CharacterIndexer()
-    tokenization_function = tokenizer.tokenize
-    
-    train_dataset = Pan2020Dataset(
-        args.train_path, 
-        tokenizer=tokenizer, 
-        indexer=characters_indexer, 
-        debug=args.debug
+        do_lower_case=args.do_lower_case
     )
-    val_dataset = Pan2020Dataset(
-        args.val_path, 
-        tokenizer=tokenizer, 
-        indexer=characters_indexer,
-        debug=args.debug
-    )
+    if args.backbone == 'charbert':
+        tokenizer = tokenizer.basic_tokenizer
+        characters_indexer = CharacterIndexer()       
+        train_dataset = Pan2020Dataset(
+            args.train_path, 
+            tokenizer=tokenizer, 
+            indexer=characters_indexer, 
+            debug=args.debug
+        )
+        val_dataset = Pan2020Dataset(
+            args.val_path, 
+            tokenizer=tokenizer, 
+            indexer=characters_indexer,
+            debug=args.debug
+        )
+    else:
+        train_dataset = Pan2020Dataset(
+            args.train_path, 
+            tokenizer=tokenizer,
+            debug=args.debug
+        )
+        val_dataset = Pan2020Dataset(
+            args.val_path, 
+            tokenizer=tokenizer,
+            debug=args.debug
+        )
+
     num_train_steps_per_epoch = math.ceil(len(train_dataset) / args.train_batch_size)
     num_train_steps = num_train_steps_per_epoch * args.num_train_epochs
     num_warmup_steps = int(args.warmup_ratio * num_train_steps)
 
-    # set up model
-    logging.info('Loading %s model', "general_character_bert")
-    config = BertConfig.from_pretrained(
-        os.path.join('pretrained_models', "general_character_bert"),
-        num_labels=2
-    )
-    config.update({"return_dict": False})
-    model = BertForSequenceClassification(config=config)
-    model.bert = CharacterBertModel.from_pretrained(
-        os.path.join('pretrained_models', "general_character_bert"),
-        config=config
-    )
+    # set up backbone
+    if args.backbone == 'charbert':
+        logging.info('Loading %s model', "general_character_bert")
+        config = BertConfig.from_pretrained(
+            os.path.join('pretrained_models', "general_character_bert"),
+            num_labels=2
+        )
+        config.update({"return_dict": False})
+        model = BertForSequenceClassification(config=config)
+        model.bert = CharacterBertModel.from_pretrained(
+            os.path.join('pretrained_models', "general_character_bert"),
+            config=config
+        )
+    else:
+        logging.info('Loading %s model', "general_bert")
+        config = BertConfig.from_pretrained(
+            os.path.join('pretrained_models', "bert-base-uncased"),
+            num_labels=2
+        )
+        config.update({"return_dict": False})
+        model = BertForSequenceClassification(config=config)
+        model.bert = BertModel.from_pretrained(
+            os.path.join('pretrained_models', "bert-base-uncased"),
+            config=config
+        )
     model.to(args.device)
+
+    if args.freeze_backbone:
+        # freeze all params except classification weights
+        for param_name, param in model.named_parameters():
+            if not 'classifier' in param_name:
+                param.requires_grad = False
+
+        for param_name, param in model.named_parameters():
+            logging.info("Param %s, requires_grad = %s, size: %s" % (param_name, param.requires_grad, param.size()))
 
     # train model using custom train/eval loop
     # global_step, train_loss, best_val_metric, best_val_epoch = train(
@@ -116,6 +153,24 @@ if __name__ == '__main__':
         greater_is_better=True
     )
 
+    # prepare SGD optimizer and scheduler
+    # Prepare optimizer and schedule (linear warmup and decay)
+    # no_decay = ["bias", "LayerNorm.weight"]
+    # optimizer_grouped_parameters = [
+    #     {
+    #         "params": [p for n, p in model.named_parameters()
+    #                    if not any(nd in n for nd in no_decay)],
+    #         "weight_decay": args.weight_decay,
+    #     },
+    #     {
+    #         "params": [p for n, p in model.named_parameters()
+    #                    if any(nd in n for nd in no_decay)],
+    #         "weight_decay": 0.0
+    #     },
+    # ]
+    # optimizer = SGD(optimizer_grouped_parameters, lr=args.learning_rate)
+    # scheduler = get_constant_schedule(optimizer)
+
     # train model using Huggingface's Trainer
     trainer = Trainer(
         model=model,
@@ -127,7 +182,7 @@ if __name__ == '__main__':
         #model_init=None,
         compute_metrics=compute_pan_metrics
         #callbacks=[LogCallback]
-        #optimizers=None
+        #optimizers=(optimizer, scheduler)
     )
     train_results = trainer.train()
     print(train_results)

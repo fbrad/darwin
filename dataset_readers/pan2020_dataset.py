@@ -40,7 +40,7 @@ class Pan2020Dataset(Dataset):
                 # 2) further split into subtokens if possible
                 # 3) index each subtoken with CharacterIndexer
                 tokens_a = self.tokenizer.tokenize(entry["pair"][0])
-                tokens_b = self.tokenizer.tokenize(entry["pair"][0])
+                tokens_b = self.tokenizer.tokenize(entry["pair"][1])
                 subtokens_a = []
                 subtokens_b = []
                 for tok in tokens_a:
@@ -90,8 +90,14 @@ class Pan2020Dataset(Dataset):
             else:
                 # tokenization produces a dictionary (BaseEncoding) with "input_ids", 
                 # "token_type_ids" and "attention_mask" keys
-                encoding = self.tokenizer(entry["pair"][0], entry["pair"][1], truncation=True)
+                encoding = self.tokenizer(
+                    text=entry["pair"][0], 
+                    text_pair=entry["pair"][1], 
+                    truncation=True,
+                    max_length=self.max_seq_length
+                )
                 encoding['labels'] = [1] if entry['same'] else [0]
+                #print("[pan2020] encoding = ", encoding)
 
                 return encoding
 
