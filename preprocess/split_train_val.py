@@ -623,12 +623,31 @@ def split_pan_dataset_open_set_unseen_authors(examples: List[Dict],
 
     return (train_ids, test_ids) 
 
+
+def extract_fandoms_sample(examples: List[Dict]) -> Dict:
+    # {"hp": ['32432321', '12312312',....]}
+    fandoms = defaultdict(list)
+    for idx, example in enumerate(examples):
+        if idx % 10000 == 0: 
+            print("Processed %d examples " % (idx))
+        a1, a2 = example['authors'][0], example['authors'][1]
+        f1, f2 = example['fandoms'][0], example['fandoms'][1]
+        d1, d2 = example['pair'][0], example['pair'][1]
+        ex_id = example['id']
+
+        if len(fandoms[f1]) < 5:
+            fandoms[f1].append(d1)
+        if len(fandoms[f2]) < 5:
+            fandoms[f2].append(d2)
+
+    return fandoms
+
 def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict], 
-                                                    test_split_percentage:float) -> (List, List):
+                                                    test_split_percentage:float) -> (List, List, List):
     """
-    Split dataset into train in test such that fandoms from train do not appear in test. 
-    Author in train mai appear in test. Similar to ```split_pan_dataset_open_set_unseen_fandoms```,
-    but the XS PAN dataset has no DA-SF pairs.
+    Split XS dataset into train/val/test such that fandoms from val/test do not appear in train. 
+    Some authors in train mai appear in val/test. Similar to ```split_pan_dataset_open_set_unseen_fandoms```,
+    but simpler algorithm due to XS PAN dataset having no DA-SF pairs.
     
     Algorithm:
         1. Let F be the fandoms of SA pairs (same-author pairs)
@@ -644,7 +663,6 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
     Returns a list of unique pair ids for each dataset split
     """
     sa_examples = [ex for ex in examples if ex['same']]
-    random.shuffle(sa_examples)
     sa_size = len(sa_examples)
     sa_test_size = int(test_split_percentage * sa_size)
     sa_train_size = sa_size - sa_test_size
@@ -654,7 +672,6 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
     da_test_size = int(test_split_percentage * da_size)
     da_train_size = da_size - da_test_size
 
-    test_ids = []
     # create SA fandoms
     fandoms_sa_train, fandoms_sa_test = defaultdict(dict), {}
     for idx, example in enumerate(sa_examples):
@@ -663,7 +680,8 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
         ex_id = example['id']
         a1, a2 = example['authors'][0], example['authors'][1]
         f1, f2 = example['fandoms'][0], example['fandoms'][1]
-        
+        assert a1 == a2, "Different authors"
+
         for a,f in zip([a1, a1], [f1, f2]):
             if f not in fandoms_sa_train:
                 fandoms_sa_train[f]['ids'] = [ex_id]
@@ -676,13 +694,15 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
     # sort dictionary from least popular fandoms to most popular
     # move fandoms from fandoms_sa_train to fandoms_sa_test until enough SA test examples
     least_freq_fandoms_train = sorted(fandoms_sa_train.items(), key=lambda x: len(x[1]['ids']))
+    #least_freq_fandoms_train = fandoms_sa_train.items()
     authors_sa_train, authors_sa_test = {}, {}
     sa_test_count = 0
+    sa_test_ids = []
     for f, f_info in least_freq_fandoms_train:
         for a in f_info['authors']:
             authors_sa_test[a] = 1
         for pair_id in f_info['ids']:
-            test_ids.append(pair_id)
+            sa_test_ids.append(pair_id)
         # move fandom info to the fandom test group
         fandoms_sa_test[f] = f_info
         sa_test_count += len(f_info['ids'])
@@ -716,6 +736,7 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
 
     # add DA examples to test set
     da_test_count = 0
+    da_test_ids = []
     authors_da_train, authors_da_test = {}, {}
     fandoms_da_train, fandoms_da_test = {}, {}
     for idx, example in enumerate(da_examples):
@@ -724,7 +745,7 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
         # limit DA-DF examples to expected size
         if f1 in fandoms_sa_test and f2 in fandoms_sa_test:
             # adding example to DA-DF test pairs
-            test_ids.append(example['id'])
+            da_test_ids.append(example['id'])
             da_test_count += 1
             fandoms_da_test[f1], fandoms_da_test[f2] = 1, 1
             authors_da_test[a1], authors_da_test[a2] = 1, 1
@@ -732,7 +753,7 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
             #    break
 
     # create DA-DF train fandoms and train authors stats
-    test_ids_map = {test_id:1 for test_id in test_ids}
+    test_ids_map = {test_id:1 for test_id in sa_test_ids+da_test_ids}
     dropped_da_train = 0
     dropped_train_ids = {}
     for idx, example in enumerate(da_examples):
@@ -754,7 +775,9 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
     print("[open_set_unseen_fandoms] dropped %d/%d in DA train group " % (dropped_da_train, da_train_size))
     print("[open_set_unseen_fandoms] #fandoms in DA train group ", len(fandoms_da_train))
     print("[open_set_unseen_fandoms] #fandoms in DA test group ", len(fandoms_da_test))
-    print("[open_set_unseen_fandoms] overlapping #fandoms DA train & DA test", \
+    print("[open_set_unseen_fandoms] overlapping #fandoms DA test & DA train", \
+            len(fandoms_da_train.keys() & fandoms_da_test.keys()))
+    print("[open_set_unseen_fandoms] overlapping #fandoms DA test & SA train", \
             len(fandoms_da_train.keys() & fandoms_da_test.keys()))
     print("[open_set_unseen_fandoms] #authors in DA train group ", len(authors_da_train))
     print("[open_set_unseen_fandoms] #authors in DA test group ", len(authors_da_test))
@@ -769,14 +792,31 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
             train_ids.append(example['id'])
     train_ids_map = {train_id:1 for train_id in train_ids}
 
+    # create val and test ids
+    print("[open_set_unseen_fandoms] val+test = %d" % (len(sa_test_ids)+len(da_test_ids)))
+    print("[open_set_unseen_fandoms]    SA val+test = %d" % (len(sa_test_ids)))
+    print("[open_set_unseen_fandoms]    DA val+test = %d" % (len(da_test_ids)))
+    val_ids = sa_test_ids[:len(sa_test_ids)//2]
+    test_ids = sa_test_ids[len(sa_test_ids)//2:]
+    val_ids += da_test_ids[:len(da_test_ids)//2]
+    test_ids += da_test_ids[len(da_test_ids)//2:]
+    print("[open_set_unseen_fandoms] val size = %d" % (len(val_ids)))
+    print("[open_set_unseen_fandoms] test size = %d" % (len(test_ids)))
+    
+    val_ids_map = {val_id:1 for val_id in val_ids}
+    test_ids_map = {test_id:1 for test_id in test_ids}
+
     # statistics
     train_stats = defaultdict(int)
+    val_stats = defaultdict(int)
     test_stats = defaultdict(int)
     for example in examples:
         same_author = example['same']
         same_fandom = example['fandoms'][0] == example['fandoms'][1]
         if example['id'] in test_ids_map:
             stats_dict = test_stats
+        elif example['id'] in val_ids_map:
+            stats_dict = val_stats
         elif example['id'] in train_ids_map:
             stats_dict = train_stats
         else:
@@ -793,23 +833,25 @@ def split_pan_small_dataset_open_set_unseen_fandoms(examples: List[Dict],
             else:
                 stats_dict['da_df'] += 1
     
-    for split_name, stats_dict in zip(["TRAIN", "TEST"], [train_stats, test_stats]):
-        split_ids = train_ids if split_name == 'TRAIN' else test_ids
-        print("%s size: %d" % (split_name, len(split_ids)))
+    split_names = ['TRAIN', 'VAL', 'TEST']
+    split_sizes = [len(train_ids), len(val_ids), len(test_ids)]
+    split_stats = [train_stats, val_stats, test_stats]
+    for split_name, split_size, stats_dict in zip(split_names, split_sizes, split_stats):
+        print("%s size: %d" % (split_name, split_size))
         print("    Same author pairs: ", stats_dict['sa_sf'] + stats_dict['sa_df'])
         print("        Same fandom pairs: ", stats_dict['sa_sf'])
         print("        Different fandom pairs: ", stats_dict['sa_df'])
         print("    Different author pairs: ", stats_dict['da_sf'] + stats_dict['da_df'])
         print("        Same fandom pairs: ", stats_dict['da_sf'])
         print("        Different fandom pairs: ", stats_dict['da_df'])
-
-    return (train_ids, test_ids)
+    
+    return (train_ids, val_ids, test_ids)
 
 def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict], 
-                                              test_split_percentage:float) -> (List, List):
+                                              test_split_percentage:float) -> (List, List, List):
     """
-    Split dataset into train in test such that fandoms from train
-    do not appear in test. Author in train mai appear in test.
+    Split XL dataset into train/val/test test such that fandoms from train
+    do not appear in val/test. Authors in train mai appear in val/test.
     Algorithm:
         1. Let F be the fandoms of DA-SF pairs (different-author same fandom)
         2. Split F into two disjoint sets F_train and F_test
@@ -818,11 +860,13 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
            *remove SA train pairs if either f1 or f2 appear in F_test
         6. populate test set with DA-DF pairs (a1, a2, f1, f2) whose fandoms f1, f2 are both in F_test
            *remove DA-DF train pairs if either f1 or f2 appear in F_test
+        7. Split test set into val/test
     Args:
         examples: dataset samples read from a .jsonl file using read_jsonl_examples()
-        test_split_percentage: size of the Test split as a percentage of the whole dataset
+        test_split_percentage: size of the Val+Test split as a percentage of the whole dataset
+                               if 0.1 then train/val/split percentages are 90%/5%/5%.
     
-    Returns a list of unique pair ids for each dataset split
+    Returns a list of unique pair ids for each train/val/test dataset split
     """
     sa_examples = [ex for ex in examples if ex['same']]
     random.shuffle(sa_examples)
@@ -846,6 +890,8 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
     da_train_size = da_sf_train_size + da_df_train_size
 
     test_ids = []
+    val_ids = []
+    sa_test_ids, da_sf_test_ids, da_df_test_ids = [], [], []
     # fandoms_train = {"fandom": {"ids": [$id, $id, ,,,],
     #                             "authors: [a1, a2, ...]}
     #                 }
@@ -871,14 +917,11 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
     da_sf_test_count = 0
     authors_da_sf_test = {}
     least_freq_fandoms_train = sorted(fandoms_da_sf_train.items(), key=lambda x: len(x[1]['ids']))
-    #least_freq_fandoms_train = fandoms_da_sf_train.items()
-    #for fandom, fandom_info in least_freq_fandoms_train:
-    #    print("Fandom %s size %d" % (fandom, len(fandom_info['ids'])))
     for fandom, fandom_info in least_freq_fandoms_train:
         for a in fandom_info['authors']:
             authors_da_sf_test[a] = 1
         for pair_id in fandom_info['ids']:
-            test_ids.append(pair_id)
+            da_sf_test_ids.append(pair_id)
         
         # move fandom info to the fandom test group
         fandoms_da_sf_test[fandom] = fandom_info
@@ -886,7 +929,6 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
         if da_sf_test_count >= da_sf_test_size:
             break
     
-    test_ids_da_sf_map = {test_id:1 for test_id in test_ids}
     # remove DA-SF test fandoms from DA-SF train fandoms
     for fandom in fandoms_da_sf_test.keys():
         if fandom in fandoms_da_sf_train:
@@ -922,7 +964,7 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
         f1, f2 = example['fandoms'][0], example['fandoms'][1]
         if f1 in fandoms_da_sf_test and f2 in fandoms_da_sf_test:
             # adding example to SA test pairs
-            test_ids.append(example['id'])
+            sa_test_ids.append(example['id'])
             sa_test_count += 1
             # update fandoms and authors stats
             fandoms_sa_test[f1] = 1
@@ -937,6 +979,7 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
     sa_train_size -= extra
     sa_test_size = sa_test_count
     test_size_so_far = sa_test_size + da_sf_test_size
+    test_ids = sa_test_ids + da_sf_test_ids
     assert len(test_ids) == test_size_so_far, \
           "len(test_ids) = %d, test_size_so_far = %d" % (len(test_ids), test_size_so_far)
     
@@ -957,16 +1000,6 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
         fandoms_sa_train[f2] = 1
         authors_sa_train[a1] = 1
 
-    # remove test fandoms from train fandoms group
-    # for f in fandoms_sa_test.keys():
-    #     if f in fandoms_sa_train:
-    #         del fandoms_sa_train[f]
-
-    # pull authors from train fandom
-    # for f, f_info in fandoms_sa_train.items():
-    #     for a in f_info['authors']:
-    #         authors_sa_train[a] = 1
-
     print("[open_set_unseen_fandoms] dropped %d/%d SA train examples " % (dropped_sa_train, sa_train_size))
     print("[open_set_unseen_fandoms] #fandoms in SA train group ", len(fandoms_sa_train))
     print("[open_set_unseen_fandoms] #fandoms in SA test group ", len(fandoms_sa_test))
@@ -984,18 +1017,6 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
     da_test_count = 0
     fandoms_da_df_train, fandoms_da_df_test = {}, {}
     authors_da_df_train, authors_da_df_test = {}, {}
-    # update fandoms statistics for DA pairs
-    # for ex in da_sf_examples:
-    #     fandoms_da_sf[ex['fandoms'][0]] = 1
-    # for ex in da_df_examples:
-    #     fandoms_da_df[ex['fandoms'][0]] = 1
-    #     fandoms_da_df[ex['fandoms'][1]] = 1
-    
-    # print("[open_set_unseen_fandoms] #fandoms in DA-SF pairs", len(fandoms_da_sf.keys()))
-    # print("[open_set_unseen_fandoms] #fandoms in DA-DF pairs", len(fandoms_da_df.keys()))
-    # print("[open_set_unseen_fandoms] #inters(DA-SF, DA-DF)", len(fandoms_da_sf.keys()&fandoms_da_df.keys()))
-    # print("[open_set_unseen_fandoms] DA-SF = %d, DA-DF = %d" % (len(da_sf_examples), len(da_df_examples)))
-    #random.shuffle(da_examples)
 
     # add DA-DF examples to test set
     da_df_test_count = 0
@@ -1005,7 +1026,7 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
         # limit DA-DF examples to expected size
         if f1 in fandoms_da_sf_test and f2 in fandoms_da_sf_test:
             # adding example to DA-DF test pairs
-            test_ids.append(example['id'])
+            da_df_test_ids.append(example['id'])
             da_df_test_count += 1
             fandoms_da_df_test[f1], fandoms_da_df_test[f2] = 1, 1
             authors_da_df_test[a1], authors_da_df_test[a2] = 1, 1
@@ -1013,6 +1034,7 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
                 break
 
     # create DA-DF train fandoms and train authors stats
+    test_ids = test_ids + da_df_test_ids
     test_ids_map = {test_id:1 for test_id in test_ids}
     dropped_da_df_train = 0
     for idx, example in enumerate(da_df_examples):
@@ -1044,20 +1066,42 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
     print("[open_set_unseen_fandoms] overlapping #authors in DA-DF test & DA-SF train ", \
             len(authors_da_sf_train.keys() & authors_da_df_test.keys()))
       
+
+    # create train ids
     train_ids = []
     for example in examples:
         if example['id'] not in test_ids_map and example['id'] not in dropped_train_ids:
             train_ids.append(example['id'])
     train_ids_map = {train_id:1 for train_id in train_ids}
 
+    # create val and test ids
+    print("[open_set_unseen_fandoms] val+test = %d" % (len(test_ids)))
+    print("[open_set_unseen_fandoms]    DA-SF val+test = %d" % (len(da_sf_test_ids)))
+    print("[open_set_unseen_fandoms]    SA val+test = %d" % (len(sa_test_ids)))
+    print("[open_set_unseen_fandoms]    DA-DF val+test = %d" % (len(da_df_test_ids)))
+    val_ids += da_sf_test_ids[:len(da_sf_test_ids)//2]
+    test_ids = da_sf_test_ids[len(da_sf_test_ids)//2:]
+    val_ids += sa_test_ids[:len(sa_test_ids)//2]
+    test_ids += sa_test_ids[len(sa_test_ids)//2:]
+    val_ids += da_df_test_ids[:len(da_df_test_ids)//2]
+    test_ids += da_df_test_ids[len(da_df_test_ids)//2:]
+    print("[open_set_unseen_fandoms] val size = %d" % (len(val_ids)))
+    print("[open_set_unseen_fandoms] test size = %d" % (len(test_ids)))
+    
+    val_ids_map = {val_id:1 for val_id in val_ids}
+    test_ids_map = {test_id:1 for test_id in test_ids}
+
     # statistics
     train_stats = defaultdict(int)
+    val_stats = defaultdict(int)
     test_stats = defaultdict(int)
     for example in examples:
         same_author = example['same']
         same_fandom = example['fandoms'][0] == example['fandoms'][1]
         if example['id'] in test_ids_map:
             stats_dict = test_stats
+        elif example['id'] in val_ids_map:
+            stats_dict = val_stats
         elif example['id'] in train_ids_map:
             stats_dict = train_stats
         else:
@@ -1074,9 +1118,11 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
             else:
                 stats_dict['da_df'] += 1
     
-    for split_name, stats_dict in zip(["TRAIN", "TEST"], [train_stats, test_stats]):
-        split_ids = train_ids if split_name == 'TRAIN' else test_ids
-        print("%s size: %d" % (split_name, len(split_ids)))
+    split_names = ['TRAIN', 'VAL', 'TEST']
+    split_sizes = [len(train_ids), len(val_ids), len(test_ids)]
+    split_stats = [train_stats, val_stats, test_stats]
+    for split_name, split_size, stats_dict in zip(split_names, split_sizes, split_stats):
+        print("%s size: %d" % (split_name, split_size))
         print("    Same author pairs: ", stats_dict['sa_sf'] + stats_dict['sa_df'])
         print("        Same fandom pairs: ", stats_dict['sa_sf'])
         print("        Different fandom pairs: ", stats_dict['sa_df'])
@@ -1084,7 +1130,7 @@ def split_pan_dataset_open_set_unseen_fandoms(examples: List[Dict],
         print("        Same fandom pairs: ", stats_dict['da_sf'])
         print("        Different fandom pairs: ", stats_dict['da_df'])
 
-    return (train_ids, test_ids)
+    return (train_ids, val_ids, test_ids)
         
 
 def make_two_author_groups(authors_source: Union[str, Dict]) -> (Dict, Dict):
@@ -1310,6 +1356,54 @@ def sample_pairs(authors_data: Dict, output_folder: str):
                 fp.write('\n')
                 samples_count += 1
 
+def split_jsonl_dataset_into_train_val_test(path_to_original_jsonl: str,
+                                            path_to_train_jsonl: str, 
+                                            path_to_val_jsonl: str, 
+                                            path_to_test_jsonl: str,
+                                            split_function: Callable[[List[Dict], float], Tuple[List]],
+                                            test_split_percentage: float):
+    """
+    Split the PAN dataset into train/val/test splits. This function is used with the
+    *open_set_unseen_fandoms split functions.
+    Args:
+        path_to_original_jsonl (str): path to existing .jsonl file, such as ```pan20-av-large-no-text.jsonl```
+        path_to_train_jsonl (str): path to .jsonl file where the training examples will be saved
+        path_to_test_jsonl (str): path to .jsonl file where the test examples will be saved
+        split_function (Callable): split function to be used:
+            - split_pan_dataset_open_set_unseen_fandoms
+            - split_pan_small_dataset_open_set_unseen_fandoms
+        test_split_percentage: size of the Val+Test split as a percentage of the whole dataset
+    """
+    if os.path.exists(path_to_original_jsonl):
+        examples = read_jsonl_examples(path_to_original_jsonl)
+    else:
+        print("File %s doesn't exist" % (path_to_original_jsonl))
+
+    # split into train and test
+    train_ids, val_ids, test_ids = split_function(
+        examples=examples, 
+        test_split_percentage=test_split_percentage
+    )
+    train_ids_map = {train_id:1 for train_id in train_ids}
+    val_ids_map = {val_id:1 for val_id in val_ids}
+    test_ids_map = {test_id:1 for test_id in test_ids}
+
+    # saving examples to train, val and test .jsonl files
+    print("Writing examples to %s, %s and %s" % (path_to_train_jsonl, path_to_val_jsonl, path_to_test_jsonl))
+    with open(path_to_train_jsonl, "w") as f, open(path_to_val_jsonl, "w") as g, open(path_to_test_jsonl, "w") as h:
+        for idx, example in enumerate(examples):
+            if idx % 10000 == 0:
+                print("[split_jsonl_dataset] Wrote %d examples" % (idx))
+            if example['id'] in test_ids_map:
+                json.dump(example, h)
+                h.write('\n')
+            elif example['id'] in val_ids_map:
+                json.dump(example, g)
+                g.write('\n')
+            elif example['id'] in train_ids_map:
+                json.dump(example, f)
+                f.write('\n')
+
 
 def split_jsonl_dataset(path_to_original_jsonl: str,
                         path_to_train_jsonl: str, 
@@ -1323,8 +1417,10 @@ def split_jsonl_dataset(path_to_original_jsonl: str,
         path_to_original_jsonl (str): path to existing .jsonl file, such as ```pan20-av-large-no-text.jsonl```
         path_to_train_jsonl (str): path to .jsonl file where the training examples will be saved
         path_to_test_jsonl (str): path to .jsonl file where the test examples will be saved
-        split_function (Callable): split function to be used (split_pan_dataset_closed_set_v1 or
-                                   split_pan_dataset_closed_set_v2)
+        split_function (Callable): split function to be used:
+            - split_pan_dataset_closed_set_v1
+            - split_pan_dataset_closed_set_v2
+            - split_pan_dataset_open_set_unseen_authors
         test_split_percentage: size of the Test split as a percentage of the whole dataset
     """
     if os.path.exists(path_to_original_jsonl):
@@ -1398,7 +1494,7 @@ if __name__ == '__main__':
         "gt": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small-truth.jsonl",
         "original": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small.jsonl",
         "original_no_text": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-no-text.jsonl",
-        "no_test": "/pan2020/pan20-authorship-verification-training-large/pan20-av-small-notest.jsonl",
+        "no_test": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-notest.jsonl",
         "train": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-train.jsonl",
         "val": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-val.jsonl",
         "test": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-test.jsonl"
@@ -1420,7 +1516,6 @@ if __name__ == '__main__':
         "test": "../data/pan2020_xs/pan20-av-small-test.jsonl"
     }
     
-    # TODO: change with the appropriate paths
     # paths_dict = {
     #     "no_test": "../data/raw/closed_splits/xs/v1_split/pan20-av-small-notest.jsonl",
     #     "test": "../data/raw/closed_splits/xs/v1_split/pan20-av-small-test.jsonl",
@@ -1428,12 +1523,15 @@ if __name__ == '__main__':
     #     "val": "../data/raw/closed_splits/xs/v1_split/pan20-av-small-val.jsonl",
     # }
 
-    paths_dict = {
-        "no_test": "../data/pan2020_xs/pan20-av-small-notest.jsonl",
-        "test": "../data/pan2020_xs/pan20-av-small-test.jsonl",
-        "train": "../data/pan2020_xs/pan20-av-small-train.jsonl",
-        "val": "../data/pan2020_xs/pan20-av-small-val.jsonl"
-    }
+    # paths_dict = {
+    #     "no_test": "../data/pan2020_xs/pan20-av-small-notest.jsonl",
+    #     "test": "../data/pan2020_xs/pan20-av-small-test.jsonl",
+    #     "train": "../data/pan2020_xs/pan20-av-small-train.jsonl",
+    #     "val": "../data/pan2020_xs/pan20-av-small-val.jsonl"
+    # }
+    
+    # TODO: change with the appropriate paths
+    paths_dict = remote_xl_paths
 
     # Step 1: split original dataset into:
     #   - Train (pan20-av-*-notest.jsonl)
@@ -1443,17 +1541,30 @@ if __name__ == '__main__':
     #     path_to_original_jsonl=paths_dict['original'],
     #     path_to_train_jsonl=paths_dict['no_test'],
     #     path_to_test_jsonl=paths_dict['test'],
-    #     split_function=split_pan_dataset_open_set_unseen_authors,
+    #     split_function=split_pan_dataset_open_set_unseen_fandoms,
     #     test_split_percentage=0.05
     # )
 
-    # Step 2: split Train dataset into Train and Val
-    # split_jsonl_dataset(
-    #     path_to_original_jsonl=paths_dict['no_test'],
+    # TODO Step 2: split Train dataset into Train and Val
+    split_jsonl_dataset(
+        path_to_original_jsonl=paths_dict['no_test'],
+        path_to_train_jsonl=paths_dict['train'],
+        path_to_test_jsonl=paths_dict['val'],
+        split_function=split_pan_dataset_open_set_unseen_fandoms,
+        test_split_percentage=0.05
+    )
+
+    # split original dataset into Train/Val/Test
+    # this function is used to create all 3 splits simultaneously for the open splits
+    # of unseen fandoms. This is due to the test fandoms needing to be the same as 
+    # the val fandoms.
+    # split_jsonl_dataset_into_train_val_test(
+    #     path_to_original_jsonl=paths_dict['original'],
     #     path_to_train_jsonl=paths_dict['train'],
-    #     path_to_test_jsonl=paths_dict['val'],
-    #     split_function=split_pan_dataset_open_set_unseen_authors,
-    #     test_split_percentage=0.05
+    #     path_to_val_jsonl=paths_dict['val'],
+    #     path_to_test_jsonl=paths_dict['test'],
+    #     split_function=split_pan_dataset_open_set_unseen_fandoms,
+    #     test_split_percentage=0.1
     # )
 
     # Step 3: write .jsonl files to folders 
@@ -1462,11 +1573,11 @@ if __name__ == '__main__':
     # write_jsonl_to_folder(paths_dict['test'], "../data/pan2020_xs/pan20-av-small-test")
 
     # Ignore lines below
-    examples = read_jsonl_examples(remote_xs_paths['original'])
-    #examples = read_jsonl_examples(remote_xl_paths['original_no_text'])
-    print_dataset_statistics(examples)
+    #examples = read_jsonl_examples(remote_xs_paths['original'])
+
+    #print_dataset_statistics(examples)
     #(train_ids, test_ids) = split_pan_dataset_open_set_unseen_fandoms(examples, 0.1)
-    (train_ids, test_ids) = split_pan_small_dataset_open_set_unseen_fandoms(examples, 0.1)
+    #(train_ids, test_ids) = split_pan_small_dataset_open_set_unseen_fandoms(examples, 0.1)
 
     #train_examples = read_jsonl_examples('../data/pan2020_xl/pan20-av-large.jsonl')
     #train_examples = read_jsonl_examples('../data/pan2020_xs/pan20-av-small.jsonl')

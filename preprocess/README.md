@@ -143,7 +143,9 @@ Make sure to specify the correct paths and split function:
 
 
 ## Open-set setup
-In the open-set setup, authors and fandoms in the test set do not appear in the training set. However, this is difficult to achieve for the PAN 2020 dataset, so we split it into train and val/test sets such that: 
+In the open-set setup, authors and fandoms in the test set do not appear in the training set. This is difficult to achieve simultanously, so we have create 2 splits: unseen authors and unseen fandoms.
+### Unseen authors split
+In this split, authors in the test set do not appear in the training set. However, this is difficult to achieve for the PAN 2020 dataset, so we split it into train and val/test sets such that: 
  - authors of same-author (SA) pairs in the test set do not appear in SA training pairs 
  - some authors (<5%) of different-author (DA) pairs in the test set may appear in the DA training pairs
  - most of the fandoms in the test set appear in the training set 
@@ -186,6 +188,73 @@ Make sure to specify the correct paths and split function:
         path_to_test_jsonl=pan20-av-large-val,
         split_function=split_pan_dataset_open_set_unseen_authors,
         test_split_percentage=0.05
+    )
+```
+### Unseen fandoms split
+In this split type:
+ - examples at test/val time belong to fandoms that have not been seen during training
+- some authors in the val/test set may also appear in the train set
+- training examples (d1, d2, f1, f2) where either f1 or f2 appear in the test fandoms are dropped => this results in ~110K fewer training examples
+
+All train/val/test splits are provided.
+
+### Files
+Download [```pan2020_open_set_unseen_fandoms_splits.zip```](https://drive.google.com/file/d/1-GyRXROBhSKBtqJm9Hun5Acq4YmKKWL_/view?usp=sharing) and unzip it. This is the structure of its content: 
+```
+unseen_fandoms/
+    xl/
+        pan20-av-large-train.jsonl
+        pan20-av-large-val.jsonl
+        pan20-av-large-test.jsonl
+    xs/
+        pan20-av-small-train.jsonl
+        pan20-av-small-val.jsonl
+        pan20-av-small-test.jsonl
+```
+
+Here are some XL dataset statistics:
+|dataset | filename | size | SA / SA-SF / SA-DF | DA / DA-SF / DA-DF | 
+|--------|----------|------|----|----|
+|PAN 2020 XL - original| ```pan20-av-large.jsonl``` | 275565 | 147778/0/147778 | 127787/23131/104656 | 
+|PAN 2020 XL - train | ```pan20-av-large-train.jsonl``` | 133990 | 71826/0/71826 | 62164/20779/41385 |
+|PAN 2020 XL - val | ```pan20-av-large-val.jsonl``` | 13451 | 7047/0/7047 | 6408/1176/5232 |
+|PAN 2020 XL - test | ```pan20-av-large-test.jsonl``` | 13453 | 7056/0/7056 | 6409/1176/5233 |
+
+
+Here are some XS dataset statistics:
+|dataset | filename | size | SA / SA-SF / SA-DF | DA / DA-SF / DA-DF |
+|--------|----------|------|----|----|
+|PAN 2020 XS - original| ```pan20-av-small.jsonl``` | 52601 | 27834/0/27834 | 24767/0/24767 | 
+|PAN 2020 XS - train | ```pan20-av-small-train.jsonl``` | 36859 | 22547/0/22547 | 14312/0/14312 |
+|PAN 2020 XS - val | ```pan20-av-small-val.jsonl``` | 4179 | 2568/0/2568 | 1393/0/1393 | 
+|PAN 2020 XS - test | ```pan20-av-small-test.jsonl``` | 4180 | 2719/0/2719 | 1394/0/1394 |
+
+To split the PAN 2020 original dataset (```pan20-av-*.jsonl```) into train/validation/test splits, call the ```split_jsonl_dataset_into_train_val_test``` function in ```preprocess/split_train_val.py```:
+```
+cd preprocess
+python split_train_val.py
+```
+
+For the XS dataset:
+```
+    split_jsonl_dataset_into_train_val_test(
+        path_to_original_jsonl=paths_dict['original'],
+        path_to_train_jsonl=paths_dict['train'],
+        path_to_val_jsonl=paths_dict['val'],
+        path_to_test_jsonl=paths_dict['test'],
+        split_function=split_pan_small_dataset_open_set_unseen_fandoms,
+        test_split_percentage=0.2
+    )
+```
+For the XL dataset:
+```
+    split_jsonl_dataset_into_train_val_test(
+        path_to_original_jsonl=paths_dict['original'],
+        path_to_train_jsonl=paths_dict['train'],
+        path_to_val_jsonl=paths_dict['val'],
+        path_to_test_jsonl=paths_dict['test'],
+        split_function=split_pan_dataset_open_set_unseen_fandoms,
+        test_split_percentage=0.1
     )
 ```
 
