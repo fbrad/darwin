@@ -2,26 +2,23 @@
 # PAN 2020 Dataset preprocessing
 
 Overview:
-1. [PAN XL Statistics](#PAN-2020-XL-statistics)
+1. [Splits summary](#Splits-summary)
 2. [Closed-set setup](#Closed-set-setup)
     - [version v1](#-Version-v1)
     - [version v2](#-Version-v2)
 3. [Open-set setup](#Open-set-setup)
-4. [Datasets](#Datasets)
+    - [unseen authors](#Unseen-authors-split)
+    - [unseen fandoms](#Unseen-fandoms-split)
+4. [Datasets statistics](#Datasets-statistics)
+5. [Original dataset files](#Original-dataset-files)
 
-## PAN 2020 XL statistics
-|  | same fandom | cross-fandom |
-|--|-------------|--------------|
-|same-author pairs| 0 | 147.778 |
-|different-author pairs| 23.131 | 104.656 |
+## Splits summary
+|split type | filename | 
+|-----------|----------|
+|closed-set v1 and v2| [pan2020_closed_set_splits.zip](https://drive.google.com/file/d/18UPhYsdtFa8ObD0M6AeMdLxJ1XH42vHQ/view?usp=sharing) | 
+|open-set unseen authors | [pan2020_open_set_unseen_authors_splits.zip](https://drive.google.com/file/d/1F_NKLjHSpiPEviUC8B2h8zJkB9_Ftp8l/view?usp=sharing) | 
+|open-set unseen fandoms | [pan2020_open_set_unseen_fandoms_splits.zip](https://drive.google.com/file/d/1-GyRXROBhSKBtqJm9Hun5Acq4YmKKWL_/view?usp=sharing) | 
 
- - same-author pairs are constructed from 41.370 authors, while different-author pairs are constructed from 251.503 authors
- - 14.704 authors in SA pairs can be found in DA pairs as well
- - 3.966 authors in DA pairs appear in at least one DA pair
- - author tuples (Ai, Aj) in DA pairs are unique (i.e. authors 532 and 7145 can be found in this combination only once in DA pairs)
- - there are 494.236 distinct documents
-
-We now detail the closed-set and open-set setups. In both setups, we split the XL dataset into 95% training and 5% test and the XS dataset into 90% training and 10% test. 
 
 ## Closed-set setup
 In the closed-set setup authors of same-author pairs in the validation/test set are guaranteed to appear in the training set. However, this is difficult to achieve for the different-author pairs of the PAN 2020 dataset, as they span a large number of authors with few occurences each.
@@ -152,16 +149,15 @@ In this split, authors in the test set do not appear in the training set. Howeve
 
 
 ### Files
-Download [```pan2020_open_set_splits.zip```](https://drive.google.com/file/d/1N_Rst0EMRKGPtFpc5SRMmrvN1flFxu0J/view?usp=sharing) and unzip it. This is the structure of its content: 
+Download [```pan2020_open_set_unseen_authors_splits.zip```](https://drive.google.com/file/d/1F_NKLjHSpiPEviUC8B2h8zJkB9_Ftp8l/view?usp=sharing) and unzip it. This is the structure of its content: 
 ```
-xl/
-   open_set/
-            pan20-av-large-test.jsonl
-            pan20-av-large-notest.jsonl
-xs/
-   open_set/
-            pan20-av-small-test.jsonl
-            pan20-av-small-notest.jsonl
+unseen_authors/
+    xl/
+        pan20-av-large-test.jsonl
+        pan20-av-large-notest.jsonl
+    xs/
+        pan20-av-small-test.jsonl
+        pan20-av-small-notest.jsonl
 ```
 
 
@@ -258,32 +254,38 @@ For the XL dataset:
     )
 ```
 
-## Datasets
-| Dataset      | Number of pairs | Positive | Negative
-| ----------- | ----------- | ---------| --------|
-| PAN 2020 XL | 275565 | 147778 | 127787 |
-| PAN 2020 XS | 52601 | 27834 | 24767 |
+## Datasets statistics
+### PAN 2020 large dataset (XL)
+The PAN 2020 large dataset has 275.565 examples, detailed here:
+|  | same fandom | cross-fandom |
+|--|-------------|--------------|
+|same-author pairs| 0 | 147.778 |
+|different-author pairs| 23.131 | 104.656 |
 
-### PAN 2020 XS (Small dataset)
- Data file: ```pan20-authorship-verification-training-small.jsonl```
+ - same-author pairs are constructed from 41.370 authors, while different-author pairs are constructed from 251.503 authors
+ - 14.704 authors in SA pairs can be found in DA pairs as well
+ - 3.966 authors in DA pairs appear in at least one DA pair
+ - author tuples (Ai, Aj) in DA pairs are unique (i.e. authors 532 and 7145 can be found in this combination only once in DA pairs)
+ - there are 494.236 distinct documents
 
- Ground truth file: ```pan20-authorship-verification-training-small-truth.jsonl```
+We now detail the closed-set and open-set setups. In both setups, we split the XL dataset into 95% training and 5% test and the XS dataset into 90% training and 10% test. 
 
- We concatenate the data and ground truth files into a single file ```pan20-av-small.jsonl``` by calling the ```merge_data_and_labels()``` function.
+### PAN 2020 small dataset (XS):
+The PAN 2020 small dataset has 52.601 examples, detailed here:
+|  | same fandom | cross-fandom |
+|--|-------------|--------------|
+|same-author pairs| 0 | 27.834 |
+|different-author pairs| 0 | 24.767 |
 
-### PAN 2020 XL (Large dataset)
- Data file: ```pan20-authorship-verification-training-large.jsonl```
+## Original dataset files
 
- Ground truth file: ```pan20-authorship-verification-training-large-truth.jsonl```
-
- We concatenate the data and ground truth files into a single file ```pan20-av-large.jsonl``` by calling the ```merge_data_and_labels()``` function.
-
-  ### Train/validation splits
- We split ```pan20-av-large.jsonl``` into a 95% training set and a 5% validation set using the ```split_train_val()``` function.
-
- Training file: ```pan20-av-large-train.jsonl```
- Validation file: ```pan20-av-large-val.jsonl```
+| dataset | original examples file | original ground truth file | merged file |
+|---------|---------------|-------------------|-------------|
+|PAN 2020 XS | ```pan20-authorship-verification-training-small.jsonl```|```pan20-authorship-verification-training-small-truth.jsonl```|```pan20-av-small.jsonl```|
+|PAN 2020 XL | ```pan20-authorship-verification-training-large.jsonl```|```pan20-authorship-verification-training-large-truth.jsonl```|```pan20-av-large.jsonl```|
 
 
-### Storing examples in separate ```.json``` files
- Since the ```.jsonl``` files are quite large, we use the ```split_large_jsonl()``` function to store examples from ```pan20-av-large-*.jsonl``` into separate ```.json``` files.
+ We concatenate the original data and ground truth files into a single file ```pan20-av-*.jsonl``` by calling the ```merge_data_and_labels()``` function.
+
+
+ Since the ```.jsonl``` files are quite large, we use the ```write_jsonl_to_folder()``` function to store examples from ```pan20-av-*.jsonl``` into separate ```.json``` files inside a folder.
