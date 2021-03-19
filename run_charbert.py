@@ -8,7 +8,9 @@ from transformers.optimization import get_constant_schedule
 from torch.utils.data import DataLoader
 from torch.optim import SGD
 from models.character_bert import CharacterBertModel
+from models.character_bert_for_classification import CharacterBertForSequenceClassification
 from dataset_readers.pan2020_dataset import Pan2020Dataset
+from dataset_readers.pan2020_segments_dataset import Pan2020SegmentsDataset
 from utils.training import train, PanTrainer, LogCallback
 from utils.metrics import evaluate_all, compute_pan_metrics
 from utils.character_cnn import CharacterIndexer
@@ -54,12 +56,14 @@ if __name__ == '__main__':
     if args.backbone == 'charbert':
         tokenizer = tokenizer.basic_tokenizer
         characters_indexer = CharacterIndexer()       
+        #train_dataset = Pan2020SegmentsDataset(
         train_dataset = Pan2020Dataset(
             args.train_path, 
             tokenizer=tokenizer, 
             indexer=characters_indexer, 
             debug=args.debug
         )
+        #val_dataset = Pan2020SegmentsDataset(
         val_dataset = Pan2020Dataset(
             args.val_path, 
             tokenizer=tokenizer, 
@@ -91,6 +95,7 @@ if __name__ == '__main__':
         )
         config.update({"return_dict": False})
         model = BertForSequenceClassification(config=config)
+        #model = CharacterBertForSequenceClassification(config=config)
         model.bert = CharacterBertModel.from_pretrained(
             os.path.join('pretrained_models', "general_character_bert"),
             config=config
@@ -138,12 +143,13 @@ if __name__ == '__main__':
         evaluation_strategy="epoch",
         per_device_train_batch_size=args.train_batch_size,
         per_device_eval_batch_size=args.eval_batch_size,
-        gradient_accumulation_steps=1,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         adam_epsilon=args.adam_epsilon,
         max_grad_norm=args.max_grad_norm,
         num_train_epochs=args.num_train_epochs,
+        #lr_scheduler_type="constant",
         lr_scheduler_type="linear",
         warmup_steps=num_warmup_steps,
         logging_dir=args.output_dir,
@@ -152,30 +158,12 @@ if __name__ == '__main__':
         metric_for_best_model='overall',
         greater_is_better=True
     )
-
-    # prepare SGD optimizer and scheduler
-    # Prepare optimizer and schedule (linear warmup and decay)
-    # no_decay = ["bias", "LayerNorm.weight"]
-    # optimizer_grouped_parameters = [
-    #     {
-    #         "params": [p for n, p in model.named_parameters()
-    #                    if not any(nd in n for nd in no_decay)],
-    #         "weight_decay": args.weight_decay,
-    #     },
-    #     {
-    #         "params": [p for n, p in model.named_parameters()
-    #                    if any(nd in n for nd in no_decay)],
-    #         "weight_decay": 0.0
-    #     },
-    # ]
-    # optimizer = SGD(optimizer_grouped_parameters, lr=args.learning_rate)
-    # scheduler = get_constant_schedule(optimizer)
-
+    
     # train model using Huggingface's Trainer
     trainer = Trainer(
         model=model,
         args=train_args,
-        #data_collator=None,
+        #data_collator=collate_fn,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         #tokenizer=None,

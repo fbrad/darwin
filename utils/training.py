@@ -98,7 +98,24 @@ def train(args, train_dataset, eval_dataset, model):
     n_train_steps = n_train_steps__single_epoch * args.num_train_epochs
     args.logging_steps = n_train_steps__single_epoch
 
-    # Prepare optimizer and schedule (linear warmup and decay)
+    # (old) Prepare SGD optimizer
+    # no_decay = ["bias", "LayerNorm.weight"]
+    # optimizer_grouped_parameters = [
+    #     {
+    #         "params": [p for n, p in model.named_parameters()
+    #                    if not any(nd in n for nd in no_decay)],
+    #         "weight_decay": args.weight_decay,
+    #     },
+    #     {
+    #         "params": [p for n, p in model.named_parameters()
+    #                    if any(nd in n for nd in no_decay)],
+    #         "weight_decay": 0.0
+    #     },
+    # ]
+    # optimizer = SGD(optimizer_grouped_parameters, lr=args.learning_rate)
+    # scheduler = get_constant_schedule(optimizer)
+
+    # Prepare Adam optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {

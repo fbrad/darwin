@@ -56,7 +56,7 @@ def parse_args():
     )
     parser.add_argument(
         "--do_lower_case",
-        action="store_true",
+        action="store_false",
         help="Whether to apply lowercasing during tokenization."
     )
     parser.add_argument(
@@ -82,7 +82,7 @@ def parse_args():
         default=5e-5, type=float, help="The initial learning rate for Adam.")
     parser.add_argument(
         "--weight_decay",
-        default=0.1, type=float, help="Weight decay if we apply some.")
+        default=0.01, type=float, help="Weight decay if we apply some.")
     parser.add_argument(
         "--warmup_ratio",
         default=0.1, type=int, help="Linear warmup over warmup_ratio*total_steps.")

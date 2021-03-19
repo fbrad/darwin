@@ -2,6 +2,7 @@ from torch.utils.data import Dataset, TensorDataset
 import torch
 import json
 import os
+import random
 from transformers import BertTokenizerFast
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from utils.data import _truncate_seq_pair 
@@ -24,7 +25,7 @@ class Pan2020Dataset(Dataset):
         self.tokenizer = tokenizer
         self.indexer = indexer
         self.debug = debug
-        self.json_files = os.listdir(path)[:10] if debug else os.listdir(path)
+        self.json_files = os.listdir(path)[:100] if debug else os.listdir(path)
 
     def __getitem__(self, idx):
         if idx < 0 or idx >= len(self):
@@ -41,6 +42,9 @@ class Pan2020Dataset(Dataset):
                 # 3) index each subtoken with CharacterIndexer
                 tokens_a = self.tokenizer.tokenize(entry["pair"][0])
                 tokens_b = self.tokenizer.tokenize(entry["pair"][1])
+                #print("len(tokens_a) = ", len(tokens_a))
+                #print("len(tokens_b) = ", len(tokens_b))
+                #print("tokens_a = ", tokens_a[0:10])
                 subtokens_a = []
                 subtokens_b = []
                 for tok in tokens_a:
@@ -51,11 +55,22 @@ class Pan2020Dataset(Dataset):
                 # Modifies `tokens_a` and `tokens_b` in place so that the total
                 # length is less than the specified length.
                 # Account for [CLS], [SEP], [SEP] with "-3"
-                _truncate_seq_pair(subtokens_a, subtokens_b, self.max_seq_length - 3)
+                #_truncate_seq_pair(subtokens_a, subtokens_b, self.max_seq_length - 3)
 
-                tokens = ["[CLS]"] + subtokens_a + ["[SEP]"] 
+                # get random 254 tokens from tokens_a and tokens_b
+                # 508 tokens + [CLS] + [SEP] + [SEP]
+                max_pair_length = self.max_seq_length // 2 - 2
+                len_a, len_b = len(subtokens_a), len(subtokens_b)
+                lidx_a = random.randrange(0, max(1, len_a-max_pair_length))
+                ridx_a = min(lidx_a + max_pair_length, len_a)
+                lidx_b = random.randrange(0, max(1, len_b-max_pair_length))
+                ridx_b = min(lidx_b + max_pair_length, len_b)
+                subtokens_a = subtokens_a[lidx_a:ridx_a]
+                subtokens_b = subtokens_b[lidx_b:ridx_b]
+
+                tokens = ["[CLS]"] + subtokens_a + ["[SEP]"]
                 segment_ids = [0] * len(tokens)
-                tokens += subtokens_b + ["[SEP"]
+                tokens += subtokens_b + ["[SEP]"]
                 segment_ids += [1] * (len(subtokens_b) + 1)
 
                 # convert token to ids

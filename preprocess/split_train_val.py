@@ -4,6 +4,7 @@ import random
 import numpy as np
 from collections import defaultdict
 from typing import Dict, Union, List, Callable, Tuple
+from transformers import BertTokenizer, BertTokenizerFast
 
 def merge_data_and_labels(data_path: str, ground_truth_path: str, merged_data_path: str):
     """
@@ -1546,13 +1547,13 @@ if __name__ == '__main__':
     # )
 
     # TODO Step 2: split Train dataset into Train and Val
-    split_jsonl_dataset(
-        path_to_original_jsonl=paths_dict['no_test'],
-        path_to_train_jsonl=paths_dict['train'],
-        path_to_test_jsonl=paths_dict['val'],
-        split_function=split_pan_dataset_open_set_unseen_fandoms,
-        test_split_percentage=0.05
-    )
+    # split_jsonl_dataset(
+    #     path_to_original_jsonl=paths_dict['no_test'],
+    #     path_to_train_jsonl=paths_dict['train'],
+    #     path_to_test_jsonl=paths_dict['val'],
+    #     split_function=split_pan_dataset_open_set_unseen_fandoms,
+    #     test_split_percentage=0.05
+    # )
 
     # split original dataset into Train/Val/Test
     # this function is used to create all 3 splits simultaneously for the open splits
@@ -1571,9 +1572,28 @@ if __name__ == '__main__':
     # write_jsonl_to_folder(paths_dict['train'], "../data/pan2020_xs/pan20-av-small-train")
     # write_jsonl_to_folder(paths_dict['val'], "../data/pan2020_xs/pan20-av-small-val")
     # write_jsonl_to_folder(paths_dict['test'], "../data/pan2020_xs/pan20-av-small-test")
+    
+    tokenizer = BertTokenizer.from_pretrained(
+        os.path.join('..', 'pretrained_models', 'bert-base-uncased'),
+        do_lower_case=True
+    )
+    print("Tokenizer = ", tokenizer)
+    tokenizer = tokenizer.basic_tokenizer
+    print("Tokenizer = ", tokenizer)
 
     # Ignore lines below
-    #examples = read_jsonl_examples(remote_xs_paths['original'])
+    examples = read_jsonl_examples(remote_xl_paths['original'], 1000)
+    examples_length = []
+    for idx, example in enumerate(examples):
+        print("idx = ", idx)
+        tokens_a = tokenizer.tokenize(example["pair"][0])
+        tokens_b = tokenizer.tokenize(example["pair"][1])
+        examples_length.append(len(tokens_a)+len(tokens_b))
+    lens = np.array(examples_length)
+    print("Avg length = ", np.mean(lens))
+    print("Max length = ", np.max(lens))
+    print("Min length = ", np.min(lens))
+    print("Std length = ", np.std(lens))
 
     #print_dataset_statistics(examples)
     #(train_ids, test_ids) = split_pan_dataset_open_set_unseen_fandoms(examples, 0.1)
