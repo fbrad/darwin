@@ -149,7 +149,6 @@ if __name__ == '__main__':
         adam_epsilon=args.adam_epsilon,
         max_grad_norm=args.max_grad_norm,
         num_train_epochs=args.num_train_epochs,
-        #lr_scheduler_type="constant",
         lr_scheduler_type="linear",
         warmup_steps=num_warmup_steps,
         logging_dir=args.output_dir,
@@ -172,10 +171,14 @@ if __name__ == '__main__':
         #callbacks=[LogCallback]
         #optimizers=(optimizer, scheduler)
     )
-    train_results = trainer.train()
-    print(train_results)
-    logging.info("train results: %s", train_results)
+    #train_results = trainer.train()
+    #logging.info("train results: %s", train_results)
     
     #val_results = trainer.evaluate()
     #print(val_results)
+
+    # load best model on dev set
+    
+
+    #test_results = trainer.evaluate(eval_dataset=test_dataset, metric_key_prefix='test')
 

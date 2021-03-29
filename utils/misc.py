@@ -42,6 +42,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--test_dir",
+        type=str,
+        default="output/xs_closed_v1",
+        help="Directory where test dataset is saved"
+    )
+
+    parser.add_argument(
         "--debug",
         action="store_true",
         default=False,

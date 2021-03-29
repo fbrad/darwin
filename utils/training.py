@@ -204,7 +204,7 @@ def train(args, train_dataset, eval_dataset, model):
     return global_step, tr_loss / global_step, best_metric, best_epoch
 
 
-def evaluate(args, eval_dataset, model):
+def evaluate(args, eval_dataset, model, test_mode=False):
     """ Evaluates the given model on the given dataset. """
 
     # Note that DistributedSampler samples randomly
@@ -224,7 +224,13 @@ def evaluate(args, eval_dataset, model):
     out_label_ids = None
     model.eval()
     for batch in tqdm.tqdm(eval_dataloader, desc="Evaluating"):
-        batch = {k: v.to(device=args.device) for k, v in batch.items()}
+        if test_mode: 
+            # remove extra dimension at test time: 1 x num_chunks => num_chunks
+            batch = {k: v.to(device=args.device).squeeze() for k, v in batch.items()}
+        else:
+            batch = {k: v.to(device=args.device) for k, v in batch.items()}
+        # for k,v in batch.items():
+        #    print("k = ", k, " size = ", v.size())
         batch['return_dict'] = False
 
         with torch.no_grad():
@@ -233,25 +239,55 @@ def evaluate(args, eval_dataset, model):
             eval_loss += tmp_eval_loss.item()
 
         nb_eval_steps += 1
-        if preds is None:
-            # batch x 2
-            probs = softmax(logits, dim=1).detach().cpu().numpy()
-            preds = logits.detach().cpu().numpy()
-            # batch
-            out_label_ids = batch["labels"].detach().cpu().numpy()
-        else:
-            # num_eval_samples x 2
-            preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-            probs = np.append(probs, softmax(logits, dim=1).detach().cpu().numpy(), axis=0)
-            # num_eval_samples
-            out_label_ids = np.append(out_label_ids, batch["labels"].detach().cpu().numpy(), axis=0)
 
-    eval_loss = eval_loss / nb_eval_steps
+        if test_mode: 
+            # batch_size refers to the number of parallel chunk pairs for whom we
+            # aggregate the predictions
+            if preds is None:
+                # batch x 2 =>  1 x 2
+                probs = softmax(logits, dim=1).detach().cpu().mean(dim=0, keepdim=True).numpy()
+                #print("probs = ", probs.shape)
+                # 1 x 2 => 1
+                preds = probs.argmax(axis=1)
+                # batch => 1
+                out_label_ids = np.array([batch["labels"][0].detach().cpu()])
+            else:
+                # print("current_probs = ", softmax(logits, dim=1))
+                
+                # batch x 2 => 1 x 2
+                current_probs = softmax(logits, dim=1).detach().cpu().mean(dim=0, keepdim=True).numpy()
+                # num_eval_samples x 2
+                probs = np.append(probs, current_probs, axis=0)
+                # num_eval_samples 
+                preds = np.append(preds, current_probs.argmax(axis=1), axis=0)
+                # num_eval_samples 
+                out_label_ids = np.append(out_label_ids, np.array([batch["labels"][0].detach().cpu()]))
+            preds_list = preds
+        else:
+            # batch_size here is the actual number of example pairs that we process in parallel
+            if preds is None:
+                # batch x 2
+                probs = softmax(logits, dim=1).detach().cpu().numpy()
+                preds = logits.detach().cpu().numpy()
+                # batch
+                out_label_ids = batch["labels"].detach().cpu().numpy()
+            else:
+                # num_eval_samples x 2
+                preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+                probs = np.append(probs, softmax(logits, dim=1).detach().cpu().numpy(), axis=0)
+                # num_eval_samples
+                out_label_ids = np.append(out_label_ids, batch["labels"].detach().cpu().numpy(), axis=0)
+
+            # num_eval_samples
+            preds_list = np.argmax(preds, axis=1)
     
-    # num_eval_samples
-    preds_list = np.argmax(preds, axis=1)
+    # probability of true class
     probs_list = probs[:,1]
 
+    eval_loss = eval_loss / nb_eval_steps
+
+    #print("out_label_ids = ", out_label_ids)
+    #print("probs_list = ", probs_list)
     results = evaluate_all(out_label_ids, probs_list)
     results['loss'] = eval_loss
 
