@@ -1479,42 +1479,90 @@ def print_dataset_statistics(examples: List[Dict]):
 
 
 if __name__ == '__main__':
-    remote_xl_paths = {
-        "data": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large.jsonl",
-        "gt": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large-truth.jsonl",
-        "original": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large.jsonl",
-        "original_no_text": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-no-text.jsonl",
-        "no_test": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-notest.jsonl",
-        "train": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-train.jsonl",
-        "val": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-val.jsonl",
-        "test": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-test.jsonl"
+    # open split - unseen authors
+    open_split_unseen_authors_paths = {
+        "remote_xl_paths": {
+            "data": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large.jsonl",
+            "gt": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large-truth.jsonl",
+            "original": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large.jsonl",
+            "original_no_text": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-no-text.jsonl",
+            "no_test": "/pan2020/open_splits/unseen_authors/xl/pan20-av-large-notest.jsonl",
+            "train": "/pan2020/open_splits/unseen_authors/xl/pan20-av-large-train.jsonl",
+            "val": "/pan2020/open_splits/unseen_authors/xl/pan20-av-large-val.jsonl",
+            "test": "/pan2020/open_splits/unseen_authors/xl/pan20-av-large-test.jsonl"
+        },
+        "remote_xs_paths": {
+            "data": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small.jsonl",
+            "gt": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small-truth.jsonl",
+            "original": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small.jsonl",
+            "original_no_text": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-no-text.jsonl",
+            "no_test": "/pan2020/open_splits/unseen_authors/xs/pan20-av-small-notest.jsonl",
+            "train": "/pan2020/open_splits/unseen_authors/xs/pan20-av-small-train.jsonl",
+            "val": "/pan2020/open_splits/unseen_authors/xs/pan20-av-small-val.jsonl",
+            "test": "/pan2020/open_splits/unseen_authors/xs/pan20-av-small-test.jsonl"
+        }
+    }
+    
+    # open split - unseen fandoms
+    open_split_unseen_fandoms_paths = {
+        "remote_xl_paths": {
+            "data": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large.jsonl",
+            "gt": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large-truth.jsonl",
+            "original": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large.jsonl",
+            "original_no_text": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-no-text.jsonl",
+            "no_test": "/pan2020/open_splits/unseen_fandoms/xl/pan20-av-large-notest.jsonl",
+            "train": "/pan2020/open_splits/unseen_fandoms/xl/pan20-av-large-train.jsonl",
+            "val": "/pan2020/open_splits/unseen_fandoms/xl/pan20-av-large-val.jsonl",
+            "test": "/pan2020/open_splits/unseen_fandoms/xl/pan20-av-large-test.jsonl"
+        },
+        "remote_xs_paths": {
+            "data": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small.jsonl",
+            "gt": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small-truth.jsonl",
+            "original": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small.jsonl",
+            "original_no_text": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-no-text.jsonl",
+            "no_test": "/pan2020/open_splits/unseen_fandoms/xs/pan20-av-small-notest.jsonl",
+            "train": "/pan2020/open_splits/unseen_fandoms/xs/pan20-av-small-train.jsonl",
+            "val": "/pan2020/open_splits/unseen_fandoms/xs/pan20-av-small-val.jsonl",
+            "test": "/pan2020/open_splits/unseen_fandoms/xs/pan20-av-small-test.jsonl"
+        }
     }
 
-    remote_xs_paths = {
-        "data": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small.jsonl",
-        "gt": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small-truth.jsonl",
-        "original": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small.jsonl",
-        "original_no_text": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-no-text.jsonl",
-        "no_test": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-notest.jsonl",
-        "train": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-train.jsonl",
-        "val": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-val.jsonl",
-        "test": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-test.jsonl"
-    }
-
-    local_xl_paths = {
-        "original": "../data/pan2020_xl/pan20-av-large.jsonl",
-        "no_test": "../data/pan2020_xl/pan20-av-large-notest.jsonl",
-        "train": "../data/pan2020_xl/pan20-av-large-train.jsonl",
-        "val": "../data/pan2020_xl/pan20-av-large-val.jsonl",
-        "test": "../data/pan2020_xl/pan20-av-large-test.jsonl"
-    }
-
-    local_xs_paths = {
-        "original": "../data/pan2020_xs/pan20-av-small.jsonl",
-        "no_test": "../data/pan2020_xs/pan20-av-small-notest.jsonl",
-        "train": "../data/pan2020_xs/pan20-av-small-train.jsonl",
-        "val": "../data/pan2020_xs/pan20-av-small-val.jsonl",
-        "test": "../data/pan2020_xs/pan20-av-small-test.jsonl"
+    # closed split v1
+    closed_split_v1_paths = {  
+        "remote_xl_paths": {
+            "data": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large.jsonl",
+            "gt": "/pan2020/pan20-authorship-verification-training-large/pan20-authorship-verification-training-large-truth.jsonl",
+            "original": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large.jsonl",
+            "original_no_text": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-no-text.jsonl",
+            "no_test": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-notest.jsonl",
+            "train": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-train.jsonl",
+            "val": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-val.jsonl",
+            "test": "/pan2020/pan20-authorship-verification-training-large/pan20-av-large-test.jsonl"
+        },
+        "remote_xs_paths": {
+            "data": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small.jsonl",
+            "gt": "/pan2020/pan20-authorship-verification-training-small/pan20-authorship-verification-training-small-truth.jsonl",
+            "original": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small.jsonl",
+            "original_no_text": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-no-text.jsonl",
+            "no_test": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-notest.jsonl",
+            "train": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-train.jsonl",
+            "val": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-val.jsonl",
+            "test": "/pan2020/pan20-authorship-verification-training-small/pan20-av-small-test.jsonl"
+        },
+        "local_xl_paths": {
+            "original": "../data/pan2020_xl/pan20-av-large.jsonl",
+            "no_test": "../data/pan2020_xl/pan20-av-large-notest.jsonl",
+            "train": "../data/pan2020_xl/pan20-av-large-train.jsonl",
+            "val": "../data/pan2020_xl/pan20-av-large-val.jsonl",
+            "test": "../data/pan2020_xl/pan20-av-large-test.jsonl"
+        },
+        "local_xs_paths": {
+            "original": "../data/pan2020_xs/pan20-av-small.jsonl",
+            "no_test": "../data/pan2020_xs/pan20-av-small-notest.jsonl",
+            "train": "../data/pan2020_xs/pan20-av-small-train.jsonl",
+            "val": "../data/pan2020_xs/pan20-av-small-val.jsonl",
+            "test": "../data/pan2020_xs/pan20-av-small-test.jsonl"
+        }
     }
     
     # paths_dict = {
@@ -1532,7 +1580,7 @@ if __name__ == '__main__':
     # }
     
     # TODO: change with the appropriate paths
-    paths_dict = remote_xl_paths
+    paths_dict = open_split_unseen_fandoms_paths['remote_xs_paths']
 
     # Step 1: split original dataset into:
     #   - Train (pan20-av-*-notest.jsonl)
@@ -1551,7 +1599,7 @@ if __name__ == '__main__':
     #     path_to_original_jsonl=paths_dict['no_test'],
     #     path_to_train_jsonl=paths_dict['train'],
     #     path_to_test_jsonl=paths_dict['val'],
-    #     split_function=split_pan_dataset_open_set_unseen_fandoms,
+    #     split_function=split_pan_dataset_open_set_unseen_authors,
     #     test_split_percentage=0.05
     # )
 
@@ -1569,31 +1617,31 @@ if __name__ == '__main__':
     # )
 
     # Step 3: write .jsonl files to folders 
-    # write_jsonl_to_folder(paths_dict['train'], "../data/pan2020_xs/pan20-av-small-train")
-    # write_jsonl_to_folder(paths_dict['val'], "../data/pan2020_xs/pan20-av-small-val")
-    # write_jsonl_to_folder(paths_dict['test'], "../data/pan2020_xs/pan20-av-small-test")
+    write_jsonl_to_folder(paths_dict['train'], paths_dict['train'].replace(".jsonl", ""))
+    write_jsonl_to_folder(paths_dict['val'], paths_dict['val'].replace(".jsonl", ""))
+    write_jsonl_to_folder(paths_dict['test'], paths_dict['test'].replace(".jsonl", ""))
     
-    tokenizer = BertTokenizer.from_pretrained(
-        os.path.join('..', 'pretrained_models', 'bert-base-uncased'),
-        do_lower_case=True
-    )
-    print("Tokenizer = ", tokenizer)
-    tokenizer = tokenizer.basic_tokenizer
-    print("Tokenizer = ", tokenizer)
+    # tokenizer = BertTokenizer.from_pretrained(
+    #     os.path.join('..', 'pretrained_models', 'bert-base-uncased'),
+    #     do_lower_case=True
+    # )
+    # print("Tokenizer = ", tokenizer)
+    # tokenizer = tokenizer.basic_tokenizer
+    # print("Tokenizer = ", tokenizer)
 
-    # Ignore lines below
-    examples = read_jsonl_examples(remote_xl_paths['original'], 1000)
-    examples_length = []
-    for idx, example in enumerate(examples):
-        print("idx = ", idx)
-        tokens_a = tokenizer.tokenize(example["pair"][0])
-        tokens_b = tokenizer.tokenize(example["pair"][1])
-        examples_length.append(len(tokens_a)+len(tokens_b))
-    lens = np.array(examples_length)
-    print("Avg length = ", np.mean(lens))
-    print("Max length = ", np.max(lens))
-    print("Min length = ", np.min(lens))
-    print("Std length = ", np.std(lens))
+    # # Ignore lines below
+    # examples = read_jsonl_examples(remote_xl_paths['original'], 1000)
+    # examples_length = []
+    # for idx, example in enumerate(examples):
+    #     print("idx = ", idx)
+    #     tokens_a = tokenizer.tokenize(example["pair"][0])
+    #     tokens_b = tokenizer.tokenize(example["pair"][1])
+    #     examples_length.append(len(tokens_a)+len(tokens_b))
+    # lens = np.array(examples_length)
+    # print("Avg length = ", np.mean(lens))
+    # print("Max length = ", np.max(lens))
+    # print("Min length = ", np.min(lens))
+    # print("Std length = ", np.std(lens))
 
     #print_dataset_statistics(examples)
     #(train_ids, test_ids) = split_pan_dataset_open_set_unseen_fandoms(examples, 0.1)
