@@ -1,0 +1,13 @@
+{
+  "debug": false,
+  "output_dir": "/data/darwin/xs_closed_v1_2e-5_randchunk",
+  "train_path": "/pan2020/closed_splits/closed_split_v1/xs/pan20-av-small-train",
+  "val_path": "/pan2020/closed_splits/closed_split_v1/xs/pan20-av-small-val",
+  "test_path": "/pan2020/closed_splits/closed_split_v1/xs/pan20-av-small-test",
+  "train_batch_size": 4,
+  "eval_batch_size": 4,
+  "gradient_accumulation_steps": 4,
+  "learning_rate": 2e-5,
+  "backbone": "charbert",
+  "freeze_backbone": false
+}

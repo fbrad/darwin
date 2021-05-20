@@ -303,4 +303,4 @@ def evaluate(args, eval_dataset, model, test_mode=False):
     for key in sorted(results.keys()):
         logging.info("  %s = %s", key, str(results[key]))
 
-    return results, preds_list
+    return results, preds_list, probs_list, out_label_ids

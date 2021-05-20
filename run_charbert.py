@@ -171,11 +171,11 @@ if __name__ == '__main__':
         #callbacks=[LogCallback]
         #optimizers=(optimizer, scheduler)
     )
-    #train_results = trainer.train()
-    #logging.info("train results: %s", train_results)
+    train_results = trainer.train()
+    logging.info("train results: %s", train_results)
     
-    #val_results = trainer.evaluate()
-    #print(val_results)
+    val_results = trainer.evaluate()
+    print(val_results)
 
     # load best model on dev set
     

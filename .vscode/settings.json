@@ -1,14 +1,23 @@
 {
- "files.exclude": {
-    "data/train/": true,
-    "data/val/": true
- },
- "files.watcherExclude": {
-    "**/.git/objects/**": true,
-    "**/.git/subtree-cache/**": true,
-    "**/node_modules/**": true,
-    "**/.hg/store/**": true,
-    "data/train/": true,
-    "data/val/": true
- }
+//  "files.exclude": {
+//     "data/train/": true,
+//     "data/val/": true
+//  },
+//  "files.watcherExclude": {
+//     "**/.git/objects/**": true,
+//     "**/.git/subtree-cache/**": true,
+//     "**/node_modules/**": true,
+//     "**/.hg/store/**": true,
+//     "data/train/": true,
+//     "data/val/": true
+//  },
+//  "python.formatting.provider": "black",
+ "python.autoComplete.extraPaths": ["/darkweb/darwin"],
+"python.analysis.watchSearchPaths": true,
+"python.linting.pylintEnabled": true,
+"python.linting.flake8Enabled": false,
+"python.linting.enabled": true,
+"python.analysis.extraPaths": [
+    "/darkweb/darwin"
+]
 }

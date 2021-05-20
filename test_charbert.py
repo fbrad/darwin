@@ -16,6 +16,7 @@ from utils.metrics import evaluate_all, compute_pan_metrics
 from utils.character_cnn import CharacterIndexer
 from utils.misc import set_seed, parse_args
 import numpy as np
+import pickle
 import sys
 import math
 import torch
@@ -35,7 +36,9 @@ if __name__ == '__main__':
 
     # set up logging
     # TODO: modify this to another checkpoint folder
-    args.output_dir = "/data/darwin/xs_open_uf_2e-5/checkpoint-9212"
+    args.output_dir = "/data/darwin/xs_open_uf_2e-5/checkpoint-13818"
+    #args.output_dir = "/data/darwin/xs_open_ua_2e-5/checkpoint-8430"
+
     logging.basicConfig(
         filename=os.path.join(args.output_dir, 'output_test.log'),
         format="%(asctime)s - %(levelname)s - %(filename)s -   %(message)s",
@@ -57,7 +60,8 @@ if __name__ == '__main__':
     # set up test dataset and dataloader
     # TODO: modify this to another test dataset
     # args.test_path = "/pan2020/closed_splits/closed_split_v1/xs/pan20-av-small-test"
-    args.test_path = "/pan2020/open_splits/unseen_fandoms/xs/pan20-av-small-test"
+    #args.test_path = "/pan2020/open_splits/unseen_fandoms/xs/pan20-av-small-test"
+    args.test_path = "/pan2020/open_splits/unseen_fandoms/xs/pan20-av-small-test.jsonl"
     test_dataset = Pan2020Dataset(
         args.test_path, 
         tokenizer=tokenizer, 
@@ -125,6 +129,51 @@ if __name__ == '__main__':
     )
         
     args.eval_batch_size = 1
-    results, preds_list = evaluate(args, test_dataset, model, test_mode=True)
+    # unpickle results
+    # results, preds_list, probs_list, out_label_ids = evaluate(
+    #     args, 
+    #     test_dataset, 
+    #     model, 
+    #     test_mode=True
+    # )
+    # print("Results w/o ensemble: ", results)
+    # logging.info(results)
+    
+    #print("probs_list = ", probs_list)
+    #print("out_label_ids = ", out_label_ids)
+
+
+    # print("shape(probs_list) = ", probs_list.shape)
+    # print("shape(out_label_ids) = ", out_label_ids.shape)
+
+    #predictii pentru clasa 1 (la mine 1 = same authors, 0 different)
+    ua_scores_fn = "/data/darwin/bert/ua/scores_allseq_seq.pkl"
+    ua_labels_fn = "/data/darwin/bert/ua/labels_allseq_seq.pkl"
+
+    uf_scores_fn = "/data/darwin/bert/uf/scores_allseq_seq-fandom.pkl"
+    uf_labels_fn = "/data/darwin/bert/uf/labels_allseq_seq-fandom.pkl"
+    
+    #load other scores
+    ua_scores = np.array(pickle.load(open(ua_scores_fn, "rb")))
+    ua_labels = pickle.load(open(ua_labels_fn, "rb"))
+    ua_labels = np.stack(ua_labels).squeeze()
+    print("ua_labels = ", ua_labels.shape)
+
+    uf_scores = np.array(pickle.load(open(uf_scores_fn, "rb")))
+    uf_labels = pickle.load(open(uf_labels_fn, "rb"))
+    uf_labels = np.stack(uf_labels).squeeze()
+    print("uf_labels = ", uf_labels.shape)
+
+    # print("probs_list shape = ", probs_list.shape)
+    # print("out_label_ids shape = ", out_label_ids.shape)
+    # print("ua_scores shape = ", ua_scores.shape)
+    
+    #mean_scores = (ua_scores + probs_list) * 0.5
+    #print("mean_scores = ", mean_scores)
+    #results = evaluate_all(out_label_ids, mean_scores)
+    results = evaluate_all(ua_labels, ua_scores)
+    print("Results w/ ensemble: ", results)
     logging.info(results)
-    print("Results = ", results)
+    # print("ua_scores = ", ua_scores)
+    # print("ua_labels = ", ua_labels)
+
