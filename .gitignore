@@ -1,4 +1,5 @@
 *.pyc
+*.pt
 __pycache__
 data/train/
 data/val/
