@@ -1,6 +1,7 @@
 *.pyc
 *.pt
 __pycache__
+.ipynb_checkpoints/
 data/train/
 data/val/
 data/

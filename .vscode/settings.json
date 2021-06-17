@@ -19,5 +19,6 @@
 "python.linting.enabled": true,
 "python.analysis.extraPaths": [
     "/darkweb/darwin"
-]
+],
+"jupyter.jupyterServerType": "local"
 }
